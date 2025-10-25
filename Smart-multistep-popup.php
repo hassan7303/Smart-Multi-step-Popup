@@ -156,11 +156,26 @@ class SMSSmartPopup {
         wp_enqueue_style('sms-popup-css');
         $css = "
         .sms-popup-overlay{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999}
-        .sms-popup{background:#fff;padding:20px;border-radius:8px;max-width:600px;width:90%;box-shadow:0 10px 30px rgba(0,0,0,.2);}
+        .sms-popup{background:#fff;padding:20px;border-radius:8px;max-width:600px;width:90%;box-shadow:0 10px 30px rgba(0,0,0,.2);    position: relative;}
         .sms-step{display:none}
         .sms-step.active{display:block}
         .sms-popup .sms-actions{margin-top:12px;text-align:right}
-        .sms-popup .sms-close{position:absolute;right:12px;top:12px;cursor:pointer}
+        .sms-popup .sms-actions button {
+  margin-left: 5px;
+}
+.sms-popup .sms-exit {
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.sms-popup .sms-exit:hover {
+  background: #c0392b;
+}
+
+        .sms-popup .sms-close{position:absolute;left:12px;top:5px;cursor:pointer;font-size: 17px;}
         ";
         
 
@@ -211,11 +226,27 @@ wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
   }
 
   function evaluateCondition(cond, values){
-      if (!cond) return true;
-      var f = cond.field; var eq = cond.equals;
-      if (typeof values[f] === 'undefined') return false;
-      return String(values[f]) === String(eq);
-  }
+    if (!cond) return true;
+
+    // پشتیبانی از any / all
+    if (Array.isArray(cond.any)) {
+        return cond.any.some(function(sub){
+            return evaluateCondition(sub, values);
+        });
+    }
+    if (Array.isArray(cond.all)) {
+        return cond.all.every(function(sub){
+            return evaluateCondition(sub, values);
+        });
+    }
+
+    // حالت کلاسیک field/equals
+    var f = cond.field;
+    var eq = cond.equals;
+    if (typeof values[f] === 'undefined') return false;
+    return String(values[f]) === String(eq);
+}
+
 
   function buildPopup(popup){
       try{
@@ -224,7 +255,14 @@ wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
 
       var overlay = document.createElement('div'); overlay.className='sms-popup-overlay';
       var box = document.createElement('div'); box.className='sms-popup';
-      box.innerHTML = '<span class="sms-close">✖</span><div class="sms-steps"></div><div class="sms-actions"><button class="sms-prev">قبلی</button> <button class="sms-next">بعدی</button></div>';
+    box.innerHTML = `
+  <span class="sms-close">✖</span>
+  <div class="sms-steps"></div>
+  <div class="sms-actions">
+    <button class="sms-prev">قبلی</button>
+    <button class="sms-next">بعدی</button>
+  </div>`;
+
       overlay.appendChild(box);
 
       var stepsWrap = box.querySelector('.sms-steps');
@@ -286,6 +324,11 @@ wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
           $(steps).find('input').each(function(){
               var name = $(this).attr('name');
               if (!name) return;
+              if ($(this).attr('type')==='checkbox'){
+                    if (!values[name]) values[name] = [];
+                    if ($(this).prop('checked')) values[name].push($(this).val());
+                }
+
               if ($(this).attr('type')==='radio'){
                   if ($(this).prop('checked')) values[name] = $(this).val();
               } else {
@@ -345,16 +388,27 @@ wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
       });
 
       // auto next for choice
-      def.steps.forEach(function(stepDef, idx){
-          if (stepDef.autoNextOnChoice){
-              var step = steps[idx];
-              $(step).find('input[type=radio]').on('change', function(){
-                  collectValues();
-                  if (validateStep()) goto(cur+1);
-              });
-          }
-      });
+     def.steps.forEach(function(stepDef, idx){
+    var step = steps[idx];
+    var autoNext =
+        stepDef.autoNextOnChoice ||
+        (stepDef.fields || []).some(f => f.autoNextOnChoice);
 
+    if (autoNext) {
+        $(step).find('input[type=radio]').on('change', function(){
+            collectValues();
+            if (validateStep()) { 
+                collectValues(); 
+                goto(cur+1);
+            }
+        });
+    }
+});
+
+box.querySelector('.sms-exit').addEventListener('click', function(){
+    document.body.removeChild(overlay);
+    setCookie('sms_popup_'+popup.id, 'closed', popup.reopen_minutes || 60);
+});
       goto(0);
   }
 
