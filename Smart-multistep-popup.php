@@ -427,7 +427,7 @@ function validateStep(){
   (sDef.fields||[]).forEach(function(f){
     let val = values[f.name];
     if (f.required && (!val || val==='')){
-      showError('لطفاً فیلد "'+f.label+'" را پر کنید.');
+      showError('لطفاً یک مورد را انتخاب کنید.');
       valid = false;
       return false;
     }
@@ -436,7 +436,7 @@ function validateStep(){
     if (f.type === 'tel' && val){
       val = ChangeFaNumberToEn(val);
       if (!isValidMobile(val)){
-        showError('شماره موبایل معتبر نیست.');
+        showError('شماره موبایل معتبر نیست.'); 
         valid = false;
         return false;
       }
@@ -465,21 +465,68 @@ function visibleStepIndexBackward(index){
   }
   return -1;
 }
+function submitForm() {
+  var payload = { popup_id: popup.id, data: values, senderButton: lastSender, _wpnonce: smsAjax.nonce };
+
+  var msgBox = $('<div class="sms-message" style="text-align:center;margin-top:15px;font-weight:bold;color:#555;">در حال ارسال...</div>');
+  overlay.find('.sms-popup').append(msgBox);
+
+  $.post(smsAjax.ajaxurl, { action: 'sms_submit', payload: JSON.stringify(payload) }, function () {
+    overlay.find('.sms-step, .sms-actions, .sms-error').remove();
+    overlay.find('.sms-popup').append('<div style="color:green;font-weight:bold;text-align:center;font-size:18px;padding:40px 10px;">✅ فرم با موفقیت ارسال شد</div>');
+    setCookie('sms_popup_' + popup.id, 'closed', popup.reopen_minutes || 60);
+  }).fail(function(){
+    overlay.find('.sms-step, .sms-actions').remove();
+    overlay.find('.sms-popup').append('<div style="color:red;font-weight:bold;text-align:center;font-size:16px;padding:40px 10px;">❌ خطا در ارسال. لطفاً دوباره تلاش کنید.</div>');
+  });
+}
 
 
-function goto(index){
+
+function goto(index) {
   var i = visibleStepIndex(index);
   if (i < 0) return;
   steps.hide().eq(i).show();
   cur = i;
   updateButtons();
+
+  var sDef = def.steps[cur];
+
+  // 🔹 اگه مرحله autoSubmit داشت، فرم رو بفرست
+ if (sDef.autoSubmit) {
+  collectValues();
+  if (!validateStep()) return;
+  lastSender = 'auto';
+  submitForm();
 }
 
 
-   function updateButtons(){
+  // 🔹 اگه hideButtons بود، دکمه‌ها رو قایم کن
+  overlay.find('.sms-actions').toggle(!sDef.hideButtons);
+}
+
+
+
+function updateButtons() {
   overlay.find('.sms-prev').toggle(visibleStepIndexBackward(cur - 1) >= 0);
-  overlay.find('.sms-next').text(cur === steps.length - 1 ? 'ارسال' : 'بعدی');
+
+  var isLastStep = true; // فرض می‌کنیم این آخره
+  for (var i = cur + 1; i < def.steps.length; i++) {
+    var nextStep = def.steps[i];
+    if (!nextStep.hideButtons) {
+      isLastStep = false;
+      break;
+    }
+  }
+
+  if (isLastStep) {
+    overlay.find('.sms-next').text('ارسال');
+  } else {
+    overlay.find('.sms-next').text('بعدی');
+  }
 }
+
+
 
 
    overlay.find('.sms-prev').on('click', function(){
@@ -489,15 +536,16 @@ function goto(index){
 });
 
     overlay.find('.sms-next').on('click', function(){
-      collectValues();
-      if (!validateStep()) return;
-      if (cur === steps.length-1){
-        var payload = {popup_id: popup.id, data: values, _wpnonce: smsAjax.nonce};
-        $.post(smsAjax.ajaxurl, {action:'sms_submit', payload: JSON.stringify(payload)}, function(){
-          overlay.remove();
-        });
-      } else goto(cur+1);
-    });
+  collectValues();
+  if (!validateStep()) return;
+  if (cur === steps.length - 1){
+    lastSender = 'manual';
+    submitForm();
+  } else {
+    goto(cur + 1);
+  }
+});
+
 
     overlay.find('.sms-close').on('click', function(){
       overlay.remove();
@@ -523,12 +571,19 @@ function goto(index){
     if (getCookie('sms_popup_'+popup.id)) return;
     var shown = false;
     var show = ()=>{ if (shown) return; shown=true; showPopup(popup); };
-    if (popup.scroll>0){
-      $(window).on('scroll', function(){
-        var pct = (window.scrollY + window.innerHeight) / document.body.scrollHeight * 100;
-        if (pct >= popup.scroll) show();
-      });
-    } else setTimeout(show, (popup.delay||3)*1000);
+   if (popup.scroll > 0) {
+  // حالت اسکرول: هر وقت رسید، نمایش بده
+  $(window).on('scroll.smsPopup', function () {
+    var pct = (window.scrollY + window.innerHeight) / document.body.scrollHeight * 100;
+    if (pct >= popup.scroll) {
+      show();
+      $(window).off('scroll.smsPopup'); // دیگه دوبار نیاد
+    }
+  });
+}
+
+// حالت زمان: بعد از delay هم بیاد
+setTimeout(show, (popup.delay || 3) * 1000);
   }
 
   $(function(){
