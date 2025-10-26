@@ -242,27 +242,48 @@ $js = <<<'JS'
 
     (def.steps || []).forEach(function(s, i){
       var step = $('<div class="sms-step" data-step-id="'+(s.id||('s'+i))+'"><h3>'+(s.title||'')+'</h3></div>');
-      (s.fields||[]).forEach(function(f){
-        var html = '';
-        if (f.type === 'choice'){
-          html += '<div class="sms-field"><label>'+f.label+'</label><div>';
-          (f.options||[]).forEach(function(opt){
+    (s.fields || []).forEach(function(f){
+    // 📘 نوع جدید: note (توضیحات با کادر سبز)
+    if (f.type === 'note') {
+        var note = $('<div class="sms-note"></div>')
+            .html(f.content || '')
+            .css({
+                'background': '#e6f4ea',
+                'border': '1px solid #66bb6a',
+                'color': '#2e7d32',
+                'padding': '10px 15px',
+                'border-radius': '8px',
+                'margin-bottom': '15px',
+                'font-size': '15px',
+                'line-height': '1.6',
+                'text-align': 'center'
+            });
+        step.prepend(note);
+        return; // بقیه‌ی انواع رو رد کن
+    }
+
+    var html = '';
+    if (f.type === 'choice') {
+        html += '<div class="sms-field"><label>'+f.label+'</label><div>';
+        (f.options || []).forEach(function(opt){
             html += '<label><input type="radio" name="'+f.name+'" value="'+opt+'"> '+opt+'</label> ';
-          });
-          html += '</div></div>';
-        } else if (['text','email','tel'].includes(f.type)){
-          html += '<div class="sms-field"><label>'+f.label+(f.required?' *':'')+'</label><input type="'+f.type+'" name="'+f.name+'" '+(f.required?'required':'')+'></div>';
-        } else if (f.type === 'checkbox'){
-          html += '<div class="sms-field"><label>'+f.label+'</label><div>';
-          (f.options||[]).forEach(opt=>{
+        });
+        html += '</div></div>';
+    } else if (['text','email','tel'].includes(f.type)) {
+        html += '<div class="sms-field"><label>'+f.label+(f.required?' *':'')+'</label><input type="'+f.type+'" name="'+f.name+'" '+(f.required?'required':'')+'></div>';
+    } else if (f.type === 'checkbox') {
+        html += '<div class="sms-field"><label>'+f.label+'</label><div>';
+        (f.options || []).forEach(opt => {
             html += '<label><input type="checkbox" name="'+f.name+'" value="'+opt+'"> '+opt+'</label> ';
-          });
-          html += '</div></div>';
-        } else if (f.type === 'html'){
-          html += '<div class="sms-field">'+f.label+'</div>';
-        }
-        step.append(html);
-      });
+        });
+        html += '</div></div>';
+    } else if (f.type === 'html') {
+        html += '<div class="sms-field">'+f.label+'</div>';
+    }
+
+    step.append(html);
+});
+
       stepsWrap.append(step);
     });
 
