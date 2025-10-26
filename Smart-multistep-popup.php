@@ -72,29 +72,29 @@ class SMSSmartPopup
             add_settings_error('sms_messages', 'sms-deleted', 'Popup deleted.', 'updated');
         }
 
-        // export submissions (not heavy)
-        if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') {
-            if (!check_admin_referer('sms_export')) return;
-            $subs = get_option($this->submissions_key, array());
-            header('Content-Type: text/csv');
-            header('Content-Disposition: attachment; filename="sms_submissions_' . date('Ymd_His') . '.csv"');
-            $out = fopen('php://output', 'w');
-            fputcsv($out, array('popup_id', 'time', 'data'));
-            foreach ($subs as $s) fputcsv($out, array($s['popup_id'], date('c', $s['time']), json_encode($s['data'])));
-            exit;
-        }
+        // export submissions خروجی میگیره ولی کامل نیست
+        // if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') {
+        //     if (!check_admin_referer('sms_export')) return;
+        //     $subs = get_option($this->submissions_key, array());
+        //     header('Content-Type: text/csv');
+        //     header('Content-Disposition: attachment; filename="sms_submissions_'.date('Ymd_His').'.csv"');
+        //     $out = fopen('php://output','w');
+        //     fputcsv($out, array('popup_id','time','data'));
+        //     foreach ($subs as $s) fputcsv($out, array($s['popup_id'], date('c',$s['time']), json_encode($s['data'])));
+        //     exit;
+        // }
     }
 
     public function admin_page()
     {
         if (!current_user_can('manage_options')) wp_die('Not allowed');
         $popups = get_option($this->option_key, array());
-        $subs = get_option($this->submissions_key, array());
+        // $subs = get_option($this->submissions_key, array()); // 🟡 نمایش ارسال‌ها غیرفعال شد
         settings_errors('sms_messages');
 ?>
         <div class="wrap">
             <h1>Smart Multi-step Popups</h1>
-            <p>در این پنل می‌توانید پاپ‌آپ‌ها را اضافه کنید. برای تعریف فرم چندمرحله‌ای از JSON استفاده کنید. مثال آماده پایین قرار دارد.</p>
+            <p>در این پنل می‌توانید پاپ‌آپ‌ها را اضافه کنید. برای تعریف فرم چندمرحله‌ای از JSON استفاده کنید.</p>
 
             <h2>Existing Popups</h2>
             <table class="widefat">
@@ -128,6 +128,7 @@ class SMSSmartPopup
             </table>
 
             <h2><?php echo isset($_GET['edit']) ? 'Edit popup' : 'New popup'; ?></h2>
+
             <?php
             $editing = null;
             if (isset($_GET['edit'])) {
@@ -136,14 +137,6 @@ class SMSSmartPopup
                     break;
                 }
             }
-            $example_json = json_encode(array(
-                'steps' => array(
-                    array('id' => 's1', 'title' => 'مرحله ۱', 'fields' => array(array('type' => 'choice', 'name' => 'pick', 'label' => 'انتخاب کن', 'options' => array('A', 'B')))),
-                    array('id' => 's2', 'title' => 'مرحله ۲A', 'condition' => array('field' => 'pick', 'equals' => 'A'), 'fields' => array(array('type' => 'text', 'name' => 'note', 'label' => 'توضیح برای A'))),
-                    array('id' => 's3', 'title' => 'مرحله ۲B', 'condition' => array('field' => 'pick', 'equals' => 'B'), 'fields' => array(array('type' => 'text', 'name' => 'note_b', 'label' => 'توضیح برای B'))),
-                    array('id' => 's4', 'title' => 'نتیجه', 'fields' => array(array('type' => 'html', 'name' => 'done', 'label' => 'متشکریم!'))),
-                )
-            ), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
             ?>
 
             <form method="post">
@@ -155,24 +148,20 @@ class SMSSmartPopup
                         <td><input name="sms_title" class="regular-text" value="<?php echo esc_attr($editing ? $editing['title'] : ''); ?>"></td>
                     </tr>
                     <tr>
-                        <th>Slugs (comma separated)</th>
-                        <td><input name="sms_slugs" class="regular-text" value="<?php echo esc_attr($editing ? implode(',', $editing['slugs']) : ''); ?>">
-                            <p class="description">مثال: contact,pricing,about</p>
-                        </td>
+                        <th>Slugs</th>
+                        <td><input name="sms_slugs" class="regular-text" value="<?php echo esc_attr($editing ? implode(',', $editing['slugs']) : ''); ?>"></td>
                     </tr>
                     <tr>
-                        <th>Delay (seconds)</th>
+                        <th>Delay</th>
                         <td><input name="sms_delay" class="small-text" value="<?php echo esc_attr($editing ? $editing['delay'] : 5); ?>"></td>
                     </tr>
                     <tr>
-                        <th>Scroll percent (0 to disable)</th>
+                        <th>Scroll %</th>
                         <td><input name="sms_scroll" class="small-text" value="<?php echo esc_attr($editing ? $editing['scroll'] : 0); ?>"></td>
                     </tr>
                     <tr>
-                        <th>Reopen after (minutes)</th>
-                        <td><input name="sms_reopen_minutes" class="small-text" value="<?php echo esc_attr($editing ? $editing['reopen_minutes'] : 60); ?>">
-                            <p class="description">پس از بستن پاپ‌آپ دوباره پس از این زمان نمایش داده می‌شود.</p>
-                        </td>
+                        <th>Reopen (min)</th>
+                        <td><input name="sms_reopen_minutes" class="small-text" value="<?php echo esc_attr($editing ? $editing['reopen_minutes'] : 60); ?>"></td>
                     </tr>
                     <tr>
                         <th>Active</th>
@@ -180,40 +169,25 @@ class SMSSmartPopup
                     </tr>
                     <tr>
                         <th>Form JSON</th>
-                        <td>
-                            <<textarea name="sms_form_json" ...><?php echo esc_textarea(stripslashes($editing ? $editing['form_json'] : $example_json)); ?></textarea>
-                                <p class="description">تعریف: یک آرایه شامل steps. هر step می‌تواند id, title, condition (optional: field, equals), fields[]. field types: choice (options array), text, email, html (برای متن) — مثال بالا را نگاه کن.</p>
-                        </td>
+                        <td><textarea name="sms_form_json" rows="10" class="large-text code"><?php echo esc_textarea(stripslashes($editing ? $editing['form_json'] : '')); ?></textarea></td>
                     </tr>
                 </table>
                 <p><button class="button button-primary" type="submit" name="sms_save_popup">Save popup</button></p>
             </form>
 
+            <?php /*
             <h2>Submissions (<?php echo count($subs); ?>)</h2>
             <p><a class="button" href="?page=sms_popups&sms_action=export_submissions&_wpnonce=<?php echo wp_create_nonce('sms_export'); ?>">Export CSV</a></p>
-            <table class="widefat">
-                <thead>
-                    <tr>
-                        <th>Popup</th>
-                        <th>Time</th>
-                        <th>Data</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($subs as $s): ?>
-                        <tr>
-                            <td><?php echo esc_html($s['popup_id']); ?></td>
-                            <td><?php echo esc_html(date('Y-m-d H:i:s', $s['time'])); ?></td>
-                            <td>
-                                <pre><?php echo esc_html(json_encode($s['data'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)); ?></pre>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+            <table class="widefat"><thead><tr><th>Popup</th><th>Time</th><th>Data</th></tr></thead><tbody>
+            <?php foreach ($subs as $s): ?>
+                <tr><td><?php echo esc_html($s['popup_id']); ?></td><td><?php echo esc_html(date('Y-m-d H:i:s',$s['time'])); ?></td><td><pre><?php echo esc_html(json_encode($s['data'], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT)); ?></pre></td></tr>
+            <?php endforeach; ?>
+            </tbody></table>
+            */ ?>
         </div>
 <?php
     }
+
 
     // --- Frontend assets ---
     public function enqueue_assets()
