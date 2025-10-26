@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name: Smart Multi-step Popup
  * Description: پاپ‌آپ فرم چندمرحله‌ای با شرط‌ها، زمان‌بندی و نمایش روی اسلاگ‌های مشخص — پیاده‌سازی یک‌فایلی برای نصب سریع.
@@ -8,11 +9,13 @@
 
 if (!defined('ABSPATH')) exit;
 
-class SMSSmartPopup {
+class SMSSmartPopup
+{
     private $option_key = 'sms_popups';
     private $submissions_key = 'sms_popup_submissions';
 
-    public function __construct() {
+    public function __construct()
+    {
         add_action('admin_menu', array($this, 'admin_menu'));
         add_action('admin_init', array($this, 'handle_admin_actions'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_assets'));
@@ -22,18 +25,20 @@ class SMSSmartPopup {
     }
 
     // --- Admin ---
-    public function admin_menu() {
+    public function admin_menu()
+    {
         add_menu_page('Smart Popups', 'Smart Popups', 'manage_options', 'sms_popups', array($this, 'admin_page'), 'dashicons-feedback', 60);
     }
 
-    public function handle_admin_actions() {
+    public function handle_admin_actions()
+    {
         if (!current_user_can('manage_options')) return;
         // save popup (create/update)
         if (isset($_POST['sms_save_popup']) && check_admin_referer('sms_save_popup')) {
             $popups = get_option($this->option_key, array());
             $id = sanitize_text_field($_POST['sms_id']);
             $data = array(
-                'id' => $id ? $id : 'p'.time(),
+                'id' => $id ? $id : 'p' . time(),
                 'title' => sanitize_text_field($_POST['sms_title']),
                 'slugs' => array_map('trim', explode(',', sanitize_text_field($_POST['sms_slugs']))),
                 'delay' => intval($_POST['sms_delay']),
@@ -45,7 +50,11 @@ class SMSSmartPopup {
             // if id exists replace
             $found = false;
             foreach ($popups as $i => $p) {
-                if ($p['id'] === $data['id']) { $popups[$i] = $data; $found = true; break; }
+                if ($p['id'] === $data['id']) {
+                    $popups[$i] = $data;
+                    $found = true;
+                    break;
+                }
             }
             if (!$found) $popups[] = $data;
             update_option($this->option_key, $popups);
@@ -68,42 +77,53 @@ class SMSSmartPopup {
             if (!check_admin_referer('sms_export')) return;
             $subs = get_option($this->submissions_key, array());
             header('Content-Type: text/csv');
-            header('Content-Disposition: attachment; filename="sms_submissions_'.date('Ymd_His').'.csv"');
-            $out = fopen('php://output','w');
-            fputcsv($out, array('popup_id','time','data'));
-            foreach ($subs as $s) fputcsv($out, array($s['popup_id'], date('c',$s['time']), json_encode($s['data'])));
+            header('Content-Disposition: attachment; filename="sms_submissions_' . date('Ymd_His') . '.csv"');
+            $out = fopen('php://output', 'w');
+            fputcsv($out, array('popup_id', 'time', 'data'));
+            foreach ($subs as $s) fputcsv($out, array($s['popup_id'], date('c', $s['time']), json_encode($s['data'])));
             exit;
         }
     }
 
-    public function admin_page() {
+    public function admin_page()
+    {
         if (!current_user_can('manage_options')) wp_die('Not allowed');
         $popups = get_option($this->option_key, array());
         $subs = get_option($this->submissions_key, array());
         settings_errors('sms_messages');
-        ?>
+?>
         <div class="wrap">
             <h1>Smart Multi-step Popups</h1>
             <p>در این پنل می‌توانید پاپ‌آپ‌ها را اضافه کنید. برای تعریف فرم چندمرحله‌ای از JSON استفاده کنید. مثال آماده پایین قرار دارد.</p>
 
             <h2>Existing Popups</h2>
             <table class="widefat">
-                <thead><tr><th>Title</th><th>Slugs</th><th>Delay(s)</th><th>Scroll(%)</th><th>Reopen(min)</th><th>Active</th><th>Actions</th></tr></thead>
-                <tbody>
-                <?php foreach ($popups as $p): ?>
+                <thead>
                     <tr>
-                        <td><?php echo esc_html($p['title']); ?></td>
-                        <td><?php echo esc_html(implode(', ', $p['slugs'])); ?></td>
-                        <td><?php echo intval($p['delay']); ?></td>
-                        <td><?php echo intval($p['scroll']); ?></td>
-                        <td><?php echo intval($p['reopen_minutes']); ?></td>
-                        <td><?php echo $p['active'] ? 'Yes' : 'No'; ?></td>
-                        <td>
-                            <a class="button" href="?page=sms_popups&edit=<?php echo esc_attr($p['id']); ?>">Edit</a>
-                            <a class="button" href="?page=sms_popups&sms_action=delete&id=<?php echo esc_attr($p['id']); ?>&_wpnonce=<?php echo wp_create_nonce('sms_delete_'.$p['id']); ?>">Delete</a>
-                        </td>
+                        <th>Title</th>
+                        <th>Slugs</th>
+                        <th>Delay(s)</th>
+                        <th>Scroll(%)</th>
+                        <th>Reopen(min)</th>
+                        <th>Active</th>
+                        <th>Actions</th>
                     </tr>
-                <?php endforeach; ?>
+                </thead>
+                <tbody>
+                    <?php foreach ($popups as $p): ?>
+                        <tr>
+                            <td><?php echo esc_html($p['title']); ?></td>
+                            <td><?php echo esc_html(implode(', ', $p['slugs'])); ?></td>
+                            <td><?php echo intval($p['delay']); ?></td>
+                            <td><?php echo intval($p['scroll']); ?></td>
+                            <td><?php echo intval($p['reopen_minutes']); ?></td>
+                            <td><?php echo $p['active'] ? 'Yes' : 'No'; ?></td>
+                            <td>
+                                <a class="button" href="?page=sms_popups&edit=<?php echo esc_attr($p['id']); ?>">Edit</a>
+                                <a class="button" href="?page=sms_popups&sms_action=delete&id=<?php echo esc_attr($p['id']); ?>&_wpnonce=<?php echo wp_create_nonce('sms_delete_' . $p['id']); ?>">Delete</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
 
@@ -111,50 +131,99 @@ class SMSSmartPopup {
             <?php
             $editing = null;
             if (isset($_GET['edit'])) {
-                foreach ($popups as $p) if ($p['id'] === $_GET['edit']) { $editing = $p; break; }
+                foreach ($popups as $p) if ($p['id'] === $_GET['edit']) {
+                    $editing = $p;
+                    break;
+                }
             }
             $example_json = json_encode(array(
                 'steps' => array(
-                    array('id' => 's1', 'title' => 'مرحله ۱', 'fields' => array(array('type'=>'choice','name'=>'pick','label'=>'انتخاب کن','options'=>array('A','B')))),
-                    array('id' => 's2', 'title' => 'مرحله ۲A', 'condition' => array('field'=>'pick','equals'=>'A'), 'fields' => array(array('type'=>'text','name'=>'note','label'=>'توضیح برای A'))),
-                    array('id' => 's3', 'title' => 'مرحله ۲B', 'condition' => array('field'=>'pick','equals'=>'B'), 'fields' => array(array('type'=>'text','name'=>'note_b','label'=>'توضیح برای B'))),
-                    array('id' => 's4', 'title' => 'نتیجه', 'fields' => array(array('type'=>'html','name'=>'done','label'=>'متشکریم!'))),
+                    array('id' => 's1', 'title' => 'مرحله ۱', 'fields' => array(array('type' => 'choice', 'name' => 'pick', 'label' => 'انتخاب کن', 'options' => array('A', 'B')))),
+                    array('id' => 's2', 'title' => 'مرحله ۲A', 'condition' => array('field' => 'pick', 'equals' => 'A'), 'fields' => array(array('type' => 'text', 'name' => 'note', 'label' => 'توضیح برای A'))),
+                    array('id' => 's3', 'title' => 'مرحله ۲B', 'condition' => array('field' => 'pick', 'equals' => 'B'), 'fields' => array(array('type' => 'text', 'name' => 'note_b', 'label' => 'توضیح برای B'))),
+                    array('id' => 's4', 'title' => 'نتیجه', 'fields' => array(array('type' => 'html', 'name' => 'done', 'label' => 'متشکریم!'))),
                 )
-            ), JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+            ), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
             ?>
 
             <form method="post">
                 <?php wp_nonce_field('sms_save_popup'); ?>
                 <input type="hidden" name="sms_id" value="<?php echo esc_attr($editing ? $editing['id'] : ''); ?>">
                 <table class="form-table">
-                    <tr><th>Title</th><td><input name="sms_title" class="regular-text" value="<?php echo esc_attr($editing ? $editing['title'] : ''); ?>"></td></tr>
-                    <tr><th>Slugs (comma separated)</th><td><input name="sms_slugs" class="regular-text" value="<?php echo esc_attr($editing ? implode(',',$editing['slugs']) : ''); ?>"><p class="description">مثال: contact,pricing,about</p></td></tr>
-                    <tr><th>Delay (seconds)</th><td><input name="sms_delay" class="small-text" value="<?php echo esc_attr($editing ? $editing['delay'] : 5); ?>"></td></tr>
-                    <tr><th>Scroll percent (0 to disable)</th><td><input name="sms_scroll" class="small-text" value="<?php echo esc_attr($editing ? $editing['scroll'] : 0); ?>"></td></tr>
-                    <tr><th>Reopen after (minutes)</th><td><input name="sms_reopen_minutes" class="small-text" value="<?php echo esc_attr($editing ? $editing['reopen_minutes'] : 60); ?>"><p class="description">پس از بستن پاپ‌آپ دوباره پس از این زمان نمایش داده می‌شود.</p></td></tr>
-                    <tr><th>Active</th><td><label><input type="checkbox" name="sms_active" <?php checked($editing ? $editing['active'] : 1,1); ?>> Active</label></td></tr>
-                    <tr><th>Form JSON</th><td><<textarea name="sms_form_json" ...><?php echo esc_textarea(stripslashes($editing ? $editing['form_json'] : $example_json)); ?></textarea>
-                    <p class="description">تعریف: یک آرایه شامل steps. هر step می‌تواند id, title, condition (optional: field, equals), fields[]. field types: choice (options array), text, email, html (برای متن) — مثال بالا را نگاه کن.</p></td></tr>
+                    <tr>
+                        <th>Title</th>
+                        <td><input name="sms_title" class="regular-text" value="<?php echo esc_attr($editing ? $editing['title'] : ''); ?>"></td>
+                    </tr>
+                    <tr>
+                        <th>Slugs (comma separated)</th>
+                        <td><input name="sms_slugs" class="regular-text" value="<?php echo esc_attr($editing ? implode(',', $editing['slugs']) : ''); ?>">
+                            <p class="description">مثال: contact,pricing,about</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Delay (seconds)</th>
+                        <td><input name="sms_delay" class="small-text" value="<?php echo esc_attr($editing ? $editing['delay'] : 5); ?>"></td>
+                    </tr>
+                    <tr>
+                        <th>Scroll percent (0 to disable)</th>
+                        <td><input name="sms_scroll" class="small-text" value="<?php echo esc_attr($editing ? $editing['scroll'] : 0); ?>"></td>
+                    </tr>
+                    <tr>
+                        <th>Reopen after (minutes)</th>
+                        <td><input name="sms_reopen_minutes" class="small-text" value="<?php echo esc_attr($editing ? $editing['reopen_minutes'] : 60); ?>">
+                            <p class="description">پس از بستن پاپ‌آپ دوباره پس از این زمان نمایش داده می‌شود.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Active</th>
+                        <td><label><input type="checkbox" name="sms_active" <?php checked($editing ? $editing['active'] : 1, 1); ?>> Active</label></td>
+                    </tr>
+                    <tr>
+                        <th>Form JSON</th>
+                        <td>
+                            <<textarea name="sms_form_json" ...><?php echo esc_textarea(stripslashes($editing ? $editing['form_json'] : $example_json)); ?></textarea>
+                                <p class="description">تعریف: یک آرایه شامل steps. هر step می‌تواند id, title, condition (optional: field, equals), fields[]. field types: choice (options array), text, email, html (برای متن) — مثال بالا را نگاه کن.</p>
+                        </td>
+                    </tr>
                 </table>
                 <p><button class="button button-primary" type="submit" name="sms_save_popup">Save popup</button></p>
             </form>
 
             <h2>Submissions (<?php echo count($subs); ?>)</h2>
             <p><a class="button" href="?page=sms_popups&sms_action=export_submissions&_wpnonce=<?php echo wp_create_nonce('sms_export'); ?>">Export CSV</a></p>
-            <table class="widefat"><thead><tr><th>Popup</th><th>Time</th><th>Data</th></tr></thead><tbody>
-            <?php foreach ($subs as $s): ?>
-                <tr><td><?php echo esc_html($s['popup_id']); ?></td><td><?php echo esc_html(date('Y-m-d H:i:s',$s['time'])); ?></td><td><pre><?php echo esc_html(json_encode($s['data'], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT)); ?></pre></td></tr>
-            <?php endforeach; ?>
-            </tbody></table>
+            <table class="widefat">
+                <thead>
+                    <tr>
+                        <th>Popup</th>
+                        <th>Time</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($subs as $s): ?>
+                        <tr>
+                            <td><?php echo esc_html($s['popup_id']); ?></td>
+                            <td><?php echo esc_html(date('Y-m-d H:i:s', $s['time'])); ?></td>
+                            <td>
+                                <pre><?php echo esc_html(json_encode($s['data'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)); ?></pre>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-        <?php
+<?php
     }
 
     // --- Frontend assets ---
-    public function enqueue_assets() {
+    public function enqueue_assets()
+    {
         wp_register_style('sms-popup-css', false);
         wp_enqueue_style('sms-popup-css');
         $css = "
+        :root {
+  --sms-primary: var(--wd-primary-color, #795548);
+}
         .sms-popup-overlay{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999}
         .sms-popup{background:#fff;padding:20px;border-radius:8px;max-width:600px;width:90%;box-shadow:0 10px 30px rgba(0,0,0,.2);    position: relative;}
         .sms-step{display:none}
@@ -174,23 +243,68 @@ class SMSSmartPopup {
 .sms-popup .sms-exit:hover {
   background: #c0392b;
 }
+/* 🎨 استایل عمومی فرم پاپ‌آپ */
+.sms-popup {
+  font-family: inherit;
+}
 
-        .sms-popup .sms-close{position:absolute;left:12px;top:5px;cursor:pointer;font-size: 17px;}
+/* دکمه‌های پاپ‌آپ */
+.sms-popup .sms-next,
+.sms-popup .sms-prev {
+  background: var(--sms-primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.25s ease;
+}
+
+/* افکت hover — همون رنگ فقط کمی تیره‌تر */
+.sms-popup .sms-next:hover,
+.sms-popup .sms-prev:hover {
+  filter: brightness(90%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* دکمه بستن (✖) هم از رنگ قالب */
+.sms-popup .sms-close {
+  color: var(--sms-primary);
+  cursor: pointer;
+  transition: color 0.25s ease, transform 0.25s ease;
+}
+.sms-popup .sms-close:hover {
+  color: #5d4037; /* اگه رنگ قالب نبود، یه قهوه‌ای تیره‌تر */
+  transform: scale(1.1);
+}
+
+/* کادر مراحل */
+.sms-popup .sms-step {
+  background: #fff;
+  padding: 25px 30px;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+}
+
+
+        .sms-popup .sms-close{color: var(--sms-primary, #8B4513);position:absolute;left:12px;top:5px;cursor:pointer;font-size: 17px;}
         ";
-        
+
 
 
         wp_add_inline_style('sms-popup-css', $css);
 
         wp_register_script('sms-popup-js', false, array('jquery'), null, true);
-                global $post;
-$slug = '';
-if (is_front_page()) {
-    $slug = 'home';
-} elseif (is_singular() && $post) {
-    $slug = $post->post_name;
-}
-wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
+        global $post;
+        $slug = '';
+        if (is_front_page()) {
+            $slug = 'home';
+        } elseif (is_singular() && $post) {
+            $slug = $post->post_name;
+        }
+        wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
         wp_enqueue_script('sms-popup-js');
         $js = $this->get_frontend_js();
         wp_add_inline_script('sms-popup-js', $js);
@@ -198,11 +312,12 @@ wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
         // localize with popups data
         $popups = get_option($this->option_key, array());
         wp_localize_script('sms-popup-js', 'smsPopupsData', $popups);
-        wp_localize_script('sms-popup-js', 'smsAjax', array('ajaxurl' => admin_url('admin-ajax.php'), 'nonce'=>wp_create_nonce('sms_submit')));
+        wp_localize_script('sms-popup-js', 'smsAjax', array('ajaxurl' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('sms_submit')));
     }
 
-private function get_frontend_js() {
-$js = <<<'JS'
+    private function get_frontend_js()
+    {
+        $js = <<<'JS'
 (function($){
   function pathMatches(slugs){
     var path = (typeof smsCurrentSlug !== 'undefined' && smsCurrentSlug) ? smsCurrentSlug : location.pathname.replace(/^\//,'').replace(/\/$/,'');
@@ -408,26 +523,28 @@ function goto(index){
   });
 })(jQuery);
 JS;
-return $js;
-}
+        return $js;
+    }
 
 
-    public function print_frontend_templates(){
+    public function print_frontend_templates()
+    {
         // none - everything inline
     }
 
     // --- AJAX submit ---
-    public function ajax_submit(){
+    public function ajax_submit()
+    {
         if (!isset($_POST['payload'])) wp_die('0');
         $payload = json_decode(stripslashes($_POST['payload']), true);
-        if (!$payload) wp_die(json_encode(array('success'=>false)));
+        if (!$payload) wp_die(json_encode(array('success' => false)));
         // store
         $subs = get_option($this->submissions_key, array());
-        $subs[] = array('popup_id'=>sanitize_text_field($payload['popup_id']),'time'=>time(),'data'=>(array)$payload['data']);
+        $subs[] = array('popup_id' => sanitize_text_field($payload['popup_id']), 'time' => time(), 'data' => (array)$payload['data']);
         update_option($this->submissions_key, $subs);
         // optionally email
         // wp_mail(get_option('admin_email'), 'New popup submission', print_r($payload,true));
-        echo json_encode(array('success'=>true));
+        echo json_encode(array('success' => true));
         wp_die();
     }
 }
