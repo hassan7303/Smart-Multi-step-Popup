@@ -397,16 +397,55 @@ class SMSSmartPopup
       });
     }
 
-    function validateStep(){
-      var sDef = def.steps[cur]; var valid = true;
-      (sDef.fields||[]).forEach(function(f){
-        if (f.required && (!values[f.name] || values[f.name]==='')){
-          alert('لطفاً فیلد "'+f.label+'" را پر کنید.');
-          valid = false;
-        }
-      });
-      return valid;
+   function ChangeFaNumberToEn(str){
+  if(!str) return '';
+  const persian = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+  const arabic  = ['٩','٨','٧','٦','٥','٤','٣','٢','١','٠'];
+  for(let i=0;i<10;i++){
+    str = str.replace(new RegExp(persian[i],'g'), i).replace(new RegExp(arabic[i],'g'), i);
+  }
+  return str;
+}
+
+function isValidMobile(m){
+  m = ChangeFaNumberToEn(m || '');
+  return /^(\+98|0098|098|0|98)?9\d{9}$/.test(m);
+}
+
+function showError(msg){
+  let errBox = overlay.find('.sms-error');
+  if(!errBox.length){
+    errBox = $('<div class="sms-error" style="color:#e74c3c;font-weight:bold;margin-bottom:10px;text-align:center;"></div>');
+    overlay.find('.sms-popup').prepend(errBox);
+  }
+  errBox.text(msg).fadeIn();
+}
+
+function validateStep(){
+  overlay.find('.sms-error').remove(); // پاک کردن خطا قبلی
+  var sDef = def.steps[cur]; var valid = true;
+  (sDef.fields||[]).forEach(function(f){
+    let val = values[f.name];
+    if (f.required && (!val || val==='')){
+      showError('لطفاً فیلد "'+f.label+'" را پر کنید.');
+      valid = false;
+      return false;
     }
+
+    // 👇 چک شماره موبایل
+    if (f.type === 'tel' && val){
+      val = ChangeFaNumberToEn(val);
+      if (!isValidMobile(val)){
+        showError('شماره موبایل معتبر نیست.');
+        valid = false;
+        return false;
+      }
+      values[f.name] = val; // عدد تبدیل‌شده رو ذخیره کنیم
+    }
+  });
+  return valid;
+}
+
 
  function visibleStepIndex(index){
   // پیدا کردن اولین مرحله‌ی معتبر از index به بعد
