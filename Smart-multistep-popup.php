@@ -490,18 +490,41 @@ function visibleStepIndexBackward(index){
 function submitForm() {
   var payload = { popup_id: popup.id, data: values, senderButton: lastSender, _wpnonce: smsAjax.nonce };
 
+  // پیام موقت
   var msgBox = $('<div class="sms-message" style="text-align:center;margin-top:15px;font-weight:bold;color:#555;">در حال ارسال...</div>');
   overlay.find('.sms-popup').append(msgBox);
 
-  $.post(smsAjax.ajaxurl, { action: 'sms_submit', payload: JSON.stringify(payload) }, function () {
-    overlay.find('.sms-step, .sms-actions, .sms-error').remove();
-    overlay.find('.sms-popup').append('<div style="color:green;font-weight:bold;text-align:center;font-size:18px;padding:40px 10px;">✅ فرم با موفقیت ارسال شد</div>');
-    setCookie('sms_popup_' + popup.id, 'closed', popup.reopen_minutes || 60);
-  }).fail(function(){
-    overlay.find('.sms-step, .sms-actions').remove();
-    overlay.find('.sms-popup').append('<div style="color:red;font-weight:bold;text-align:center;font-size:16px;padding:40px 10px;">❌ خطا در ارسال. لطفاً دوباره تلاش کنید.</div>');
-  });
+  $.post(smsAjax.ajaxurl, { action: 'sms_submit', payload: JSON.stringify(payload) })
+    .done(function (res) {
+      overlay.find('.sms-message').remove();
+
+      var sDef = def.steps[cur];
+      var targetId = (sDef && sDef.onSubmitShowStep) ? sDef.onSubmitShowStep : null;
+
+      // اگه onSubmitShowStep مشخص شده بود → بریم اون استپ و بس
+      if (targetId) {
+        var nextIndex = def.steps.findIndex(function(s){ return s.id === targetId; });
+        if (nextIndex !== -1) {
+          goto(nextIndex);
+          return; // 🧠 بعدش دیگه هیچ کاری نکن 
+        }
+      }
+
+      // اگه مرحله‌ای برای نمایش مشخص نشده بود، دیگه کاری نکن
+      // ❌ هیچ پیام پیش‌فرض سبزی اضافه نشه
+    })
+    .fail(function () {
+      overlay.find('.sms-message').remove();
+      overlay.find('.sms-step, .sms-actions').remove();
+      overlay.find('.sms-popup').append(
+        '<div style="color:red;font-weight:bold;text-align:center;font-size:16px;padding:40px 10px;">❌ خطا در ارسال. لطفاً دوباره تلاش کنید.</div>'
+      );
+    });
 }
+
+
+
+
 
 
 
@@ -540,11 +563,13 @@ function updateButtons() {
       break;
     }
   }
-
-  if (isLastStep) {
-    overlay.find('.sms-next').text('ارسال');
+var nextBtn = overlay.find('.sms-next');
+   if (isLastStep) {
+    nextBtn.text('ارسال');
+    nextBtn.removeClass('sms-next').addClass('sms-submit-btn');
   } else {
-    overlay.find('.sms-next').text('بعدی');
+    nextBtn.text('بعدی');
+    nextBtn.removeClass('sms-submit-btn').addClass('sms-next');
   }
 }
 
