@@ -240,6 +240,7 @@ class SMSSmartPopup
 
 /* دکمه‌های پاپ‌آپ */
 .sms-popup .sms-next,
+sms-submit-btn,
 .sms-popup .sms-prev {
   background: var(--sms-primary);
   color: #fff;
