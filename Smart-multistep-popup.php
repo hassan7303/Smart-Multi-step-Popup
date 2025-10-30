@@ -9,11 +9,11 @@
 
 if (!defined('ABSPATH')) exit;
 register_activation_hook(__FILE__, function () {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'sms_popup_submissions';
-    $charset_collate = $wpdb->get_charset_collate();
+  global $wpdb;
+  $table_name = $wpdb->prefix . 'sms_popup_submissions';
+  $charset_collate = $wpdb->get_charset_collate();
 
-    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+  $sql = "CREATE TABLE IF NOT EXISTS $table_name (
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         popup_id VARCHAR(100) NOT NULL,
         submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -21,32 +21,33 @@ register_activation_hook(__FILE__, function () {
         PRIMARY KEY  (id)
     ) $charset_collate;";
 
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    dbDelta($sql);
+  require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+  dbDelta($sql);
 });
 
 class SMSSmartPopup
 {
-    private $option_key = 'sms_popups';
-    private $submissions_key = 'wp_sms_popup_submissions';
+  private $option_key = 'sms_popups';
+  private $submissions_key = 'wp_sms_popup_submissions';
 
-    public function __construct()
-    {
-        add_action('admin_menu', array($this, 'admin_menu'));
-        add_action('admin_init', array($this, 'handle_admin_actions'));
-        add_action('wp_enqueue_scripts', array($this, 'enqueue_assets'));
-        add_action('wp_footer', array($this, 'print_frontend_templates'));
-        add_action('wp_ajax_sms_submit', array($this, 'ajax_submit'));
-        add_action('wp_ajax_nopriv_sms_submit', array($this, 'ajax_submit'));
-    }
+  public function __construct()
+  {
+    add_action('admin_menu', array($this, 'admin_menu'));
+    add_action('admin_init', array($this, 'handle_admin_actions'));
+    add_action('wp_enqueue_scripts', array($this, 'enqueue_assets'));
+    add_action('wp_footer', array($this, 'print_frontend_templates'));
+    add_action('wp_ajax_sms_submit', array($this, 'ajax_submit'));
+    add_action('wp_ajax_nopriv_sms_submit', array($this, 'ajax_submit'));
+  }
 
-    // --- Admin ---
-    public function admin_menu()
-    {
-        add_menu_page('Smart Popups', 'Smart Popups', 'manage_options', 'sms_popups', array($this, 'admin_page'), 'dashicons-feedback', 60);
-        add_submenu_page('sms_popups', 'Reports', 'Reports', 'manage_options', 'sms_popup_reports', [$this, 'reports_page']);
-    }
-    public function reports_page() {
+  // --- Admin ---
+  public function admin_menu()
+  {
+    add_menu_page('Smart Popups', 'Smart Popups', 'manage_options', 'sms_popups', array($this, 'admin_page'), 'dashicons-feedback', 60);
+    add_submenu_page('sms_popups', 'Reports', 'Reports', 'manage_options', 'sms_popup_reports', [$this, 'reports_page']);
+  }
+  public function reports_page()
+  {
     global $wpdb;
     $table = $wpdb->prefix . 'sms_popup_submissions';
 
@@ -55,321 +56,371 @@ class SMSSmartPopup
     $params = [];
 
     if ($popup_id) {
-        $where = 'WHERE popup_id = %s';
-        $params[] = $popup_id;
+      $where = 'WHERE popup_id = %s';
+      $params[] = $popup_id;
     }
 
     $sql = "SELECT * FROM $table $where ORDER BY submitted_at DESC LIMIT 200";
     $rows = $params ? $wpdb->get_results($wpdb->prepare($sql, ...$params)) : $wpdb->get_results($sql);
-    ?>
+?>
     <div class="wrap">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-            <h1>📊 Popup Reports</h1>
-            <a href="?page=sms_popups&sms_action=export_submissions&_wpnonce=<?php echo wp_create_nonce('sms_export'); ?>" class="button button-primary">
-                📥 خروجی CSV
-            </a>
-        </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h1>📊 Popup Reports</h1>
+        <a href="?page=sms_popups&sms_action=export_submissions&_wpnonce=<?php echo wp_create_nonce('sms_export'); ?>" class="button button-primary">
+          📥 خروجی CSV
+        </a>
+      </div>
 
-        <form method="get" style="margin-bottom: 15px;">
-            <input type="hidden" name="page" value="sms_popup_reports">
-            <input type="text" name="popup_id" placeholder="Popup ID..." value="<?php echo esc_attr($popup_id); ?>">
-            <button class="button">Filter</button>
-        </form>
+      <form method="get" style="margin-bottom: 15px;">
+        <input type="hidden" name="page" value="sms_popup_reports">
+        <input type="text" name="popup_id" placeholder="Popup ID..." value="<?php echo esc_attr($popup_id); ?>">
+        <button class="button">Filter</button>
+      </form>
 
-        <table class="widefat fixed striped">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Popup ID</th>
-                    <th>📞 Mobile</th>
-                    <th>Time</th>
-                    <th>Data</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($rows)): ?>
-                    <tr><td colspan="5" style="text-align:center;">❌ No records found.</td></tr>
-                <?php else: foreach ($rows as $r):
-                    $data = json_decode($r->data, true);
-                    $mobile = '';
-                    // استخراج شماره موبایل از فیلدهایی که احتمالاً با "mobile" یا "phone" نام‌گذاری شدن
-                    foreach ($data as $k => $v) {
-                        if (preg_match('/(mobile|phone|tel)/i', $k)) {
-                            $mobile = is_array($v) ? implode(',', $v) : $v;
-                            break;
-                        }
-                    }
-                ?>
-                    <tr>
-                        <td><?php echo intval($r->id); ?></td>
-                        <td><?php echo esc_html($r->popup_id); ?></td>
-                        <td><?php echo esc_html($mobile ?: '—'); ?></td>
-                        <td><?php echo esc_html($r->submitted_at); ?></td>
-                        <td>
-                            <button class="button view-json" data-json="<?php echo esc_attr($r->data); ?>">👁️ نمایش</button>
-                        </td>
-                    </tr>
-                <?php endforeach; endif; ?>
-            </tbody>
-        </table>
+      <table class="widefat fixed striped">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Popup ID</th>
+            <th>📞 Mobile</th>
+            <th>Time</th>
+            <th>Data</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php if (empty($rows)): ?>
+            <tr>
+              <td colspan="5" style="text-align:center;">❌ No records found.</td>
+            </tr>
+            <?php else: foreach ($rows as $r):
+              $data = json_decode($r->data, true);
+              $mobile = '';
+              // استخراج شماره موبایل از فیلدهایی که احتمالاً با "mobile" یا "phone" نام‌گذاری شدن
+              foreach ($data as $k => $v) {
+                if (preg_match('/(mobile|phone|tel)/i', $k)) {
+                  $mobile = is_array($v) ? implode(',', $v) : $v;
+                  break;
+                }
+              }
+            ?>
+              <tr>
+                <td><?php echo intval($r->id); ?></td>
+                <td><?php echo esc_html($r->popup_id); ?></td>
+                <td><?php echo esc_html($mobile ?: '—'); ?></td>
+                <td><?php echo esc_html($r->submitted_at); ?></td>
+                <td>
+                  <button class="button view-json" data-json="<?php echo esc_attr($r->data); ?>">👁️ نمایش</button>
+                </td>
+              </tr>
+          <?php endforeach;
+          endif; ?>
+        </tbody>
+      </table>
     </div>
 
     <script>
-    jQuery(function($){
-        $('body').on('click', '.view-json', function(){
-            var raw = $(this).data('json');
-            var obj;
-            try { obj = JSON.parse(raw); } catch(e){ obj = raw; }
+      jQuery(function($) {
+        $('body').on('click', '.view-json', function() {
+          var raw = $(this).data('json');
+          var obj;
+          try {
+            obj = JSON.parse(raw);
+          } catch (e) {
+            obj = raw;
+          }
 
-            var content = '<table class="json-table">';
-            if (typeof obj === 'object') {
-                for (var k in obj) {
-                    if (!obj.hasOwnProperty(k)) continue;
-                    content += '<tr><th>'+k+'</th><td>'+obj[k]+'</td></tr>';
-                }
-            } else {
-                content += '<tr><td>'+raw+'</td></tr>';
+          var content = '<table class="json-table">';
+          if (typeof obj === 'object') {
+            for (var k in obj) {
+              if (!obj.hasOwnProperty(k)) continue;
+              content += '<tr><th>' + k + '</th><td>' + obj[k] + '</td></tr>';
             }
-            content += '</table>';
+          } else {
+            content += '<tr><td>' + raw + '</td></tr>';
+          }
+          content += '</table>';
 
-            var overlay = $('<div class="sms-admin-overlay">\
+          var overlay = $('<div class="sms-admin-overlay">\
                 <div class="sms-admin-popup">\
                     <span class="close">&times;</span>\
                     <h2>جزئیات ارسال</h2>\
-                    <div class="content">'+content+'</div>\
+                    <div class="content">' + content + '</div>\
                 </div>\
             </div>');
-            $('body').append(overlay);
-            overlay.fadeIn(200);
+          $('body').append(overlay);
+          overlay.fadeIn(200);
         });
-        $('body').on('click', '.sms-admin-overlay', function(e){
-            if ($(e.target).is('.sms-admin-overlay')) {
-                $(this).fadeOut(150, function(){ $(this).remove(); });
-            }
+        $('body').on('click', '.sms-admin-overlay', function(e) {
+          if ($(e.target).is('.sms-admin-overlay')) {
+            $(this).fadeOut(150, function() {
+              $(this).remove();
+            });
+          }
         });
-    });
-    
+      });
     </script>
     <style>
-.sms-admin-overlay {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    background: rgba(0, 0, 0, 0.6) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    z-index: 999999 !important;
-}
-.sms-admin-popup {
-    background: #fff;
-    padding: 25px 30px;
-    border-radius: 10px;
-    max-width: 600px;
-    width: 90%;
-    box-shadow: 0 0 25px rgba(0,0,0,0.4);
-    position: relative;
-    animation: fadeIn 0.25s ease;
-}
-.sms-admin-popup .close {
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    font-size: 22px;
-    cursor: pointer;
-    color: #555;
-}
-@keyframes fadeIn {
-    from {opacity: 0; transform: scale(0.9);}
-    to {opacity: 1; transform: scale(1);}
-}
-</style>
+      .sms-input {
+        width: 70%;
+        padding: 6px 14px;
+        border: 2px solid #d7ccc8;
+        border-radius: 10px;
+        font-size: 15px;
+        outline: none;
+        transition: all 0.25s ease;
+        background: #fafafa;
+        color: #3e2723;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
 
-    <?php
-}
+      /* وقتی روش فوکوس می‌کنی، یه نوره خاص لوتی میاد */
+      .sms-input:focus {
+        border-color: var(--sms-primary, #795548);
+        background: #fff;
+        box-shadow: 0 0 8px rgba(121, 85, 72, 0.4);
+      }
 
+      /* placeholder هم یه حالت محو و ظریف بگیره */
+      .sms-input::placeholder {
+        color: #8d6e63;
+        opacity: 0.7;
+        font-style: italic;
+      }
 
+      .sms-field>div {
+        display: flex;
+        flex-direction: column;
+      }
 
+      .sms-admin-overlay {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(0, 0, 0, 0.6) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 999999 !important;
+      }
 
-    public function handle_admin_actions()
-    {
-        if (!current_user_can('manage_options')) return;
-        // save popup (create/update)
-        if (isset($_POST['sms_save_popup']) && check_admin_referer('sms_save_popup')) {
-            $popups = get_option($this->option_key, array());
-            $id = sanitize_text_field($_POST['sms_id']);
-            $data = array(
-                'id' => $id ? $id : 'p' . time(),
-                'title' => sanitize_text_field($_POST['sms_title']),
-                'slugs' => array_map('trim', explode(',', sanitize_text_field($_POST['sms_slugs']))),
-                'delay' => intval($_POST['sms_delay']),
-                'scroll' => intval($_POST['sms_scroll']),
-                'reopen_minutes' => intval($_POST['sms_reopen_minutes']),
-                'form_json' => wp_unslash($_POST['sms_form_json']),
-                'active' => isset($_POST['sms_active']) ? 1 : 0,
-            );
-            // if id exists replace
-            $found = false;
-            foreach ($popups as $i => $p) {
-                if ($p['id'] === $data['id']) {
-                    $popups[$i] = $data;
-                    $found = true;
-                    break;
-                }
-            }
-            if (!$found) $popups[] = $data;
-            update_option($this->option_key, $popups);
-            add_settings_error('sms_messages', 'sms-saved', 'Popup saved.', 'updated');
+      .sms-admin-popup {
+        background: #fff;
+        padding: 25px 30px;
+        border-radius: 10px;
+        max-width: 600px;
+        width: 90%;
+        box-shadow: 0 0 25px rgba(0, 0, 0, 0.4);
+        position: relative;
+        animation: fadeIn 0.25s ease;
+      }
+
+      .sms-admin-popup .close {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        font-size: 22px;
+        cursor: pointer;
+        color: #555;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.9);
         }
 
-        // delete
-        if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'delete' && isset($_GET['id'])) {
-            if (!check_admin_referer('sms_delete_' . $_GET['id'])) return;
-            $popups = get_option($this->option_key, array());
-            $id = sanitize_text_field($_GET['id']);
-            $new = array();
-            foreach ($popups as $p) if ($p['id'] !== $id) $new[] = $p;
-            update_option($this->option_key, $new);
-            add_settings_error('sms_messages', 'sms-deleted', 'Popup deleted.', 'updated');
+        to {
+          opacity: 1;
+          transform: scale(1);
         }
+      }
+    </style>
 
-      // ✅ Export submissions from database table
-if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') {
-    if (!check_admin_referer('sms_export')) return;
+  <?php
+  }
 
-    global $wpdb;
-    $table = $wpdb->prefix . 'sms_popup_submissions';
 
-    // فیلتر اختیاری بر اساس popup_id
-    $popup_id = isset($_GET['popup_id']) ? sanitize_text_field($_GET['popup_id']) : '';
-    $where = '';
-    $params = [];
 
-    if ($popup_id) {
+
+  public function handle_admin_actions()
+  {
+    if (!current_user_can('manage_options')) return;
+    // save popup (create/update)
+    if (isset($_POST['sms_save_popup']) && check_admin_referer('sms_save_popup')) {
+      $popups = get_option($this->option_key, array());
+      $id = sanitize_text_field($_POST['sms_id']);
+      $data = array(
+        'id' => $id ? $id : 'p' . time(),
+        'title' => sanitize_text_field($_POST['sms_title']),
+        'slugs' => array_map('trim', explode(',', sanitize_text_field($_POST['sms_slugs']))),
+        'delay' => intval($_POST['sms_delay']),
+        'scroll' => intval($_POST['sms_scroll']),
+        'reopen_minutes' => intval($_POST['sms_reopen_minutes']),
+        'form_json' => wp_unslash($_POST['sms_form_json']),
+        'active' => isset($_POST['sms_active']) ? 1 : 0,
+      );
+      // if id exists replace
+      $found = false;
+      foreach ($popups as $i => $p) {
+        if ($p['id'] === $data['id']) {
+          $popups[$i] = $data;
+          $found = true;
+          break;
+        }
+      }
+      if (!$found) $popups[] = $data;
+      update_option($this->option_key, $popups);
+      add_settings_error('sms_messages', 'sms-saved', 'Popup saved.', 'updated');
+    }
+
+    // delete
+    if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'delete' && isset($_GET['id'])) {
+      if (!check_admin_referer('sms_delete_' . $_GET['id'])) return;
+      $popups = get_option($this->option_key, array());
+      $id = sanitize_text_field($_GET['id']);
+      $new = array();
+      foreach ($popups as $p) if ($p['id'] !== $id) $new[] = $p;
+      update_option($this->option_key, $new);
+      add_settings_error('sms_messages', 'sms-deleted', 'Popup deleted.', 'updated');
+    }
+
+    // ✅ Export submissions from database table
+    if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') {
+      if (!check_admin_referer('sms_export')) return;
+
+      global $wpdb;
+      $table = $wpdb->prefix . 'sms_popup_submissions';
+
+      // فیلتر اختیاری بر اساس popup_id
+      $popup_id = isset($_GET['popup_id']) ? sanitize_text_field($_GET['popup_id']) : '';
+      $where = '';
+      $params = [];
+
+      if ($popup_id) {
         $where = 'WHERE popup_id = %s';
         $params[] = $popup_id;
-    }
+      }
 
-    $sql = "SELECT * FROM $table $where ORDER BY submitted_at DESC";
-    $rows = $params ? $wpdb->get_results($wpdb->prepare($sql, ...$params)) : $wpdb->get_results($sql);
+      $sql = "SELECT * FROM $table $where ORDER BY submitted_at DESC";
+      $rows = $params ? $wpdb->get_results($wpdb->prepare($sql, ...$params)) : $wpdb->get_results($sql);
 
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="sms_submissions_'.date('Ymd_His').'.csv"');
-    $out = fopen('php://output', 'w');
-    fputcsv($out, array('ID', 'Popup ID', 'Time', 'Data'));
+      header('Content-Type: text/csv; charset=utf-8');
+      header('Content-Disposition: attachment; filename="sms_submissions_' . date('Ymd_His') . '.csv"');
+      $out = fopen('php://output', 'w');
+      fputcsv($out, array('ID', 'Popup ID', 'Time', 'Data'));
 
-    foreach ($rows as $r) {
+      foreach ($rows as $r) {
         fputcsv($out, array($r->id, $r->popup_id, $r->submitted_at, $r->data));
+      }
+
+      fclose($out);
+      exit;
     }
+  }
 
-    fclose($out);
-    exit;
-}
-    }
+  public function admin_page()
+  {
+    if (!current_user_can('manage_options')) wp_die('Not allowed');
+    $popups = get_option($this->option_key, array());
+    $subs = get_option($this->submissions_key, array()); // 🟡 نمایش ارسال‌ها غیرفعال شد
+    settings_errors('sms_messages');
+  ?>
+    <div class="wrap">
+      <h1>Smart Multi-step Popups</h1>
+      <p>در این پنل می‌توانید پاپ‌آپ‌ها را اضافه کنید. برای تعریف فرم چندمرحله‌ای از JSON استفاده کنید.</p>
 
-    public function admin_page()
-    {
-        if (!current_user_can('manage_options')) wp_die('Not allowed');
-        $popups = get_option($this->option_key, array());
-        $subs = get_option($this->submissions_key, array()); // 🟡 نمایش ارسال‌ها غیرفعال شد
-        settings_errors('sms_messages');
-?>
-        <div class="wrap">
-            <h1>Smart Multi-step Popups</h1>
-            <p>در این پنل می‌توانید پاپ‌آپ‌ها را اضافه کنید. برای تعریف فرم چندمرحله‌ای از JSON استفاده کنید.</p>
+      <h2>Existing Popups</h2>
+      <table class="widefat">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Slugs</th>
+            <th>Delay(s)</th>
+            <th>Scroll(%)</th>
+            <th>Reopen(min)</th>
+            <th>Active</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($popups as $p): ?>
+            <tr>
+              <td><?php echo esc_html($p['title']); ?></td>
+              <td><?php echo esc_html(implode(', ', $p['slugs'])); ?></td>
+              <td><?php echo intval($p['delay']); ?></td>
+              <td><?php echo intval($p['scroll']); ?></td>
+              <td><?php echo intval($p['reopen_minutes']); ?></td>
+              <td><?php echo $p['active'] ? 'Yes' : 'No'; ?></td>
+              <td>
+                <a class="button" href="?page=sms_popups&edit=<?php echo esc_attr($p['id']); ?>">Edit</a>
+                <a class="button" href="?page=sms_popups&sms_action=delete&id=<?php echo esc_attr($p['id']); ?>&_wpnonce=<?php echo wp_create_nonce('sms_delete_' . $p['id']); ?>">Delete</a>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
 
-            <h2>Existing Popups</h2>
-            <table class="widefat">
-                <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Slugs</th>
-                        <th>Delay(s)</th>
-                        <th>Scroll(%)</th>
-                        <th>Reopen(min)</th>
-                        <th>Active</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($popups as $p): ?>
-                        <tr>
-                            <td><?php echo esc_html($p['title']); ?></td>
-                            <td><?php echo esc_html(implode(', ', $p['slugs'])); ?></td>
-                            <td><?php echo intval($p['delay']); ?></td>
-                            <td><?php echo intval($p['scroll']); ?></td>
-                            <td><?php echo intval($p['reopen_minutes']); ?></td>
-                            <td><?php echo $p['active'] ? 'Yes' : 'No'; ?></td>
-                            <td>
-                                <a class="button" href="?page=sms_popups&edit=<?php echo esc_attr($p['id']); ?>">Edit</a>
-                                <a class="button" href="?page=sms_popups&sms_action=delete&id=<?php echo esc_attr($p['id']); ?>&_wpnonce=<?php echo wp_create_nonce('sms_delete_' . $p['id']); ?>">Delete</a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+      <h2><?php echo isset($_GET['edit']) ? 'Edit popup' : 'New popup'; ?></h2>
 
-            <h2><?php echo isset($_GET['edit']) ? 'Edit popup' : 'New popup'; ?></h2>
+      <?php
+      $editing = null;
+      if (isset($_GET['edit'])) {
+        foreach ($popups as $p) if ($p['id'] === $_GET['edit']) {
+          $editing = $p;
+          break;
+        }
+      }
+      ?>
 
-            <?php
-            $editing = null;
-            if (isset($_GET['edit'])) {
-                foreach ($popups as $p) if ($p['id'] === $_GET['edit']) {
-                    $editing = $p;
-                    break;
-                }
-            }
-            ?>
-
-            <form method="post">
-                <?php wp_nonce_field('sms_save_popup'); ?>
-                <input type="hidden" name="sms_id" value="<?php echo esc_attr($editing ? $editing['id'] : ''); ?>">
-                <table class="form-table">
-                    <tr>
-                        <th>Title</th>
-                        <td><input name="sms_title" class="regular-text" value="<?php echo esc_attr($editing ? $editing['title'] : ''); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th>Slugs</th>
-                        <td><input name="sms_slugs" class="regular-text" value="<?php echo esc_attr($editing ? implode(',', $editing['slugs']) : ''); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th>Delay</th>
-                        <td><input name="sms_delay" class="small-text" value="<?php echo esc_attr($editing ? $editing['delay'] : 5); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th>Scroll %</th>
-                        <td><input name="sms_scroll" class="small-text" value="<?php echo esc_attr($editing ? $editing['scroll'] : 0); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th>Reopen (min)</th>
-                        <td><input name="sms_reopen_minutes" class="small-text" value="<?php echo esc_attr($editing ? $editing['reopen_minutes'] : 60); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th>Active</th>
-                        <td><label><input type="checkbox" name="sms_active" <?php checked($editing ? $editing['active'] : 1, 1); ?>> Active</label></td>
-                    </tr>
-                    <tr>
-                        <th>Form JSON</th>
-                        <td><textarea name="sms_form_json" rows="10" class="large-text code"><?php echo esc_textarea(stripslashes($editing ? $editing['form_json'] : '')); ?></textarea></td>
-                    </tr>
-                </table>
-                <p><button class="button button-primary" type="submit" name="sms_save_popup">Save popup</button></p>
-            </form>
-
-            
-<?php
-    }
+      <form method="post">
+        <?php wp_nonce_field('sms_save_popup'); ?>
+        <input type="hidden" name="sms_id" value="<?php echo esc_attr($editing ? $editing['id'] : ''); ?>">
+        <table class="form-table">
+          <tr>
+            <th>Title</th>
+            <td><input name="sms_title" class="regular-text" value="<?php echo esc_attr($editing ? $editing['title'] : ''); ?>"></td>
+          </tr>
+          <tr>
+            <th>Slugs</th>
+            <td><input name="sms_slugs" class="regular-text" value="<?php echo esc_attr($editing ? implode(',', $editing['slugs']) : ''); ?>"></td>
+          </tr>
+          <tr>
+            <th>Delay</th>
+            <td><input name="sms_delay" class="small-text" value="<?php echo esc_attr($editing ? $editing['delay'] : 5); ?>"></td>
+          </tr>
+          <tr>
+            <th>Scroll %</th>
+            <td><input name="sms_scroll" class="small-text" value="<?php echo esc_attr($editing ? $editing['scroll'] : 0); ?>"></td>
+          </tr>
+          <tr>
+            <th>Reopen (min)</th>
+            <td><input name="sms_reopen_minutes" class="small-text" value="<?php echo esc_attr($editing ? $editing['reopen_minutes'] : 60); ?>"></td>
+          </tr>
+          <tr>
+            <th>Active</th>
+            <td><label><input type="checkbox" name="sms_active" <?php checked($editing ? $editing['active'] : 1, 1); ?>> Active</label></td>
+          </tr>
+          <tr>
+            <th>Form JSON</th>
+            <td><textarea name="sms_form_json" rows="10" class="large-text code"><?php echo esc_textarea(stripslashes($editing ? $editing['form_json'] : '')); ?></textarea></td>
+          </tr>
+        </table>
+        <p><button class="button button-primary" type="submit" name="sms_save_popup">Save popup</button></p>
+      </form>
 
 
-    // --- Frontend assets ---
-    public function enqueue_assets()
-    {
-        wp_register_style('sms-popup-css', false);
-        wp_enqueue_style('sms-popup-css');
-        $css = "
+  <?php
+  }
+
+
+  // --- Frontend assets ---
+  public function enqueue_assets()
+  {
+    wp_register_style('sms-popup-css', false);
+    wp_enqueue_style('sms-popup-css');
+    $css = "
         :root {
   --sms-primary: var(--wd-primary-color, #795548);
 }
@@ -437,6 +488,13 @@ if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') 
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.15);
 }
+  .sms__label__class{
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    justify-content: flex-start;
+    align-items: center;
+  }
 
 
         .sms-popup .sms-close{color: var(--sms-primary, #8B4513);position:absolute;left:12px;top:5px;cursor:pointer;font-size: 17px;}
@@ -444,30 +502,30 @@ if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') 
 
 
 
-        wp_add_inline_style('sms-popup-css', $css);
+    wp_add_inline_style('sms-popup-css', $css);
 
-        wp_register_script('sms-popup-js', false, array('jquery'), null, true);
-        global $post;
-        $slug = '';
-        if (is_front_page()) {
-            $slug = 'home';
-        } elseif (is_singular() && $post) {
-            $slug = $post->post_name;
-        }
-        wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
-        wp_enqueue_script('sms-popup-js');
-        $js = $this->get_frontend_js();
-        wp_add_inline_script('sms-popup-js', $js);
-
-        // localize with popups data
-        $popups = get_option($this->option_key, array());
-        wp_localize_script('sms-popup-js', 'smsPopupsData', $popups);
-        wp_localize_script('sms-popup-js', 'smsAjax', array('ajaxurl' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('sms_submit')));
+    wp_register_script('sms-popup-js', false, array('jquery'), null, true);
+    global $post;
+    $slug = '';
+    if (is_front_page()) {
+      $slug = 'home';
+    } elseif (is_singular() && $post) {
+      $slug = $post->post_name;
     }
+    wp_localize_script('sms-popup-js', 'smsCurrentSlug', $slug);
+    wp_enqueue_script('sms-popup-js');
+    $js = $this->get_frontend_js();
+    wp_add_inline_script('sms-popup-js', $js);
 
-    private function get_frontend_js()
-    {
-        $js = <<<'JS'
+    // localize with popups data
+    $popups = get_option($this->option_key, array());
+    wp_localize_script('sms-popup-js', 'smsPopupsData', $popups);
+    wp_localize_script('sms-popup-js', 'smsAjax', array('ajaxurl' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('sms_submit')));
+  }
+
+  private function get_frontend_js()
+  {
+    $js = <<<'JS'
 (function($){
   function pathMatches(slugs){
     var path = (typeof smsCurrentSlug !== 'undefined' && smsCurrentSlug) ? smsCurrentSlug : location.pathname.replace(/^\//,'').replace(/\/$/,'');
@@ -531,15 +589,15 @@ if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') 
     if (f.type === 'choice') {
         html += '<div class="sms-field"><label>'+f.label+'</label><div>';
         (f.options || []).forEach(function(opt){
-            html += '<label><input type="radio" name="'+f.name+'" value="'+opt+'"> '+opt+'</label> ';
+            html += '<label class="sms__label__class"><input type="radio" name="'+f.name+'" value="'+opt+'"> '+opt+'</label> ';
         });
         html += '</div></div>';
     } else if (['text','email','tel'].includes(f.type)) {
-        html += '<div class="sms-field"><label>'+f.label+(f.required?' *':'')+'</label><input type="'+f.type+'" name="'+f.name+'" '+(f.required?'required':'')+'></div>';
+        html += '<div class="sms-field"><label class="sms__label__class">'+f.label+(f.required?' *':'')+'</label><input class="sms-input" type="'+f.type+'" name="'+f.name+'" '+(f.required?'required':'')+'></div>';
     } else if (f.type === 'checkbox') {
-        html += '<div class="sms-field"><label>'+f.label+'</label><div>';
+        html += '<div class="sms-field"><label >'+f.label+'</label><div>';
         (f.options || []).forEach(opt => {
-            html += '<label><input type="checkbox" name="'+f.name+'" value="'+opt+'"> '+opt+'</label> ';
+            html += '<label class="sms__label__class" ><input type="checkbox" name="'+f.name+'" value="'+opt+'"> '+opt+'</label> ';
         });
         html += '</div></div>';
     } else if (f.type === 'html') {
@@ -809,28 +867,28 @@ setTimeout(show, (popup.delay || 3) * 1000);
   });
 })(jQuery);
 JS;
-        return $js;
-    }
+    return $js;
+  }
 
 
-    public function print_frontend_templates()
-    {
-        // none - everything inline
-    }
+  public function print_frontend_templates()
+  {
+    // none - everything inline
+  }
 
-    // --- AJAX submit ---
-   public function ajax_submit()
-{
+  // --- AJAX submit ---
+  public function ajax_submit()
+  {
     global $wpdb;
     $table = $wpdb->prefix . 'sms_popup_submissions'; // ✅ جدول دیتابیس خودت
 
     if (empty($_POST['payload'])) {
-        wp_send_json_error(['msg' => 'no payload']);
+      wp_send_json_error(['msg' => 'no payload']);
     }
 
     $payload = json_decode(stripslashes($_POST['payload']), true);
     if (!$payload) {
-        wp_send_json_error(['msg' => 'invalid json']);
+      wp_send_json_error(['msg' => 'invalid json']);
     }
 
     $popup_id = sanitize_text_field($payload['popup_id']);
@@ -840,25 +898,24 @@ JS;
 
     // ✅ درج در جدول سفارشی
     $ok = $wpdb->insert(
-        $table,
-        [
-            'popup_id'      => $popup_id,
-            'data'          => $data,
-            'submitted_at'  => current_time('mysql'),
-        ],
-        ['%s', '%s', '%s']
+      $table,
+      [
+        'popup_id'      => $popup_id,
+        'data'          => $data,
+        'submitted_at'  => current_time('mysql'),
+      ],
+      ['%s', '%s', '%s']
     );
 
     if ($ok) {
-        wp_send_json_success(['id' => $wpdb->insert_id]);
+      wp_send_json_success(['id' => $wpdb->insert_id]);
     } else {
-        error_log('❌ sms_submit db error: ' . $wpdb->last_error);
-        wp_send_json_error(['msg' => 'db insert failed']);
+      error_log('❌ sms_submit db error: ' . $wpdb->last_error);
+      wp_send_json_error(['msg' => 'db insert failed']);
     }
-}
-
+  }
 }
 
 new SMSSmartPopup();
 
-?>
+  ?>
