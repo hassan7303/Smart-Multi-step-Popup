@@ -160,33 +160,6 @@ class SMSSmartPopup
       });
     </script>
     <style>
-      .sms-input {
-        width: 70%;
-        padding: 6px 14px;
-        border: 2px solid #d7ccc8;
-        border-radius: 10px;
-        font-size: 15px;
-        outline: none;
-        transition: all 0.25s ease;
-        background: #fafafa;
-        color: #3e2723;
-        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
-      }
-
-      /* وقتی روش فوکوس می‌کنی، یه نوره خاص لوتی میاد */
-      .sms-input:focus {
-        border-color: var(--sms-primary, #795548);
-        background: #fff;
-        box-shadow: 0 0 8px rgba(121, 85, 72, 0.4);
-      }
-
-      /* placeholder هم یه حالت محو و ظریف بگیره */
-      .sms-input::placeholder {
-        color: #8d6e63;
-        opacity: 0.7;
-        font-style: italic;
-      }
-
       .sms-field>div {
         display: flex;
         flex-direction: column;
@@ -480,7 +453,32 @@ class SMSSmartPopup
   color: #5d4037; /* اگه رنگ قالب نبود، یه قهوه‌ای تیره‌تر */
   transform: scale(1.1);
 }
+      .sms-input {
+        width: 70%;
+        padding: 6px 14px;
+        border: 2px solid #d7ccc8;
+        border-radius: 10px;
+        font-size: 15px;
+        outline: none;
+        transition: all 0.25s ease;
+        background: #fafafa;
+        color: #3e2723;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
 
+      /* وقتی روش فوکوس می‌کنی، یه نوره خاص لوتی میاد */
+      .sms-input:focus {
+        border-color: var(--sms-primary, #795548);
+        background: #fff;
+        box-shadow: 0 0 8px rgba(121, 85, 72, 0.4);
+      }
+
+      /* placeholder هم یه حالت محو و ظریف بگیره */
+      .sms-input::placeholder {
+        color: #8d6e63;
+        opacity: 0.7;
+        font-style: italic;
+      }
 /* کادر مراحل */
 .sms-popup .sms-step {
   background: #fff;
