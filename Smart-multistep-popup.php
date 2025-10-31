@@ -398,7 +398,7 @@ class SMSSmartPopup
   --sms-primary: var(--wd-primary-color, #795548);
 }
         .sms-popup-overlay{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999}
-        .sms-popup{background:#fff;padding:20px;border-radius:8px;max-width:600px;width:90%;box-shadow:0 10px 30px rgba(0,0,0,.2);    position: relative;}
+        .sms-popup{background:#fff;padding:20px;border-radius:8px;max-width:600px;width:90%;box-shadow:0 10px 30px rgba(0,0,0,.2);    position: relative;overflow: hidden;}
         .sms-step{display:none}
         .sms-step.active{display:block}
         .sms-popup .sms-actions{margin-top:12px;text-align:right}
@@ -481,10 +481,12 @@ class SMSSmartPopup
       }
 /* کادر مراحل */
 .sms-popup .sms-step {
-  background: #fff;
-  padding: 25px 30px;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    background: #fff;
+    padding: 25px 30px;
+    border-radius: 12px;  
+    border-bottom: 1px solid #dddddd7d;
+    border-right: 1px solid #dddddd7d;
+    border-left: 1px solid #dddddd7d;
 }
   .sms__label__class{
     display: flex;
@@ -493,9 +495,34 @@ class SMSSmartPopup
     justify-content: flex-start;
     align-items: center;
   }
+    .sms__popup__a{
+      background: #e2e2da;
+      padding: 10px 15px;
+      font-size: 16px;
+      margin-top: 5px;
+      display: block;
+      color: #9e591d;
+      border-radius: 4px;
+      font-weight: 700;
+      text-decoration: none;
+      font-weight: bold;
+    }
 
-
-        .sms-popup .sms-close{color: var(--sms-primary, #8B4513);position:absolute;left:12px;top:5px;cursor:pointer;font-size: 17px;}
+        .sms-popup .sms-close{
+          color: white;
+          position: absolute;
+          left: -2px;
+          top: -4px;
+          cursor: pointer;
+          font-size: 16px;
+          background: var(--sms-primary, #8B4513);
+          border-radius: 7px 0 18px 0;
+          padding: 5px;
+          width: 29px;
+          height: 30px;
+          text-align: center;
+          line-height: 24px;
+        }
         ";
 
 
@@ -601,7 +628,7 @@ class SMSSmartPopup
     } else if (f.type === 'html') {
         html += '<div class="sms-field">'+f.label+'</div>';
     }else if (f.type === 'button' && f.action === 'submit') {
-    html += '<div class="sms-field"><button type="button" class="sms-submit-btn">'+(f.label||'ارسال')+'</button></div>';
+    html += '<div class="sms-field"><button type="button" class="sms-submit-btn">'+(f.label||'ارسال درخواست')+'</button></div>';
 }
 
 
@@ -621,6 +648,13 @@ class SMSSmartPopup
     var built = buildPopup(popup); if (!built) return;
     var {overlay, def} = built;
     $('body').append(overlay);
+    // ✳️ اگه بیرون از پاپ‌آپ کلیک کنه، بسته میشه
+    overlay.on('click', function(e) {
+      if ($(e.target).is('.sms-popup-overlay')) {
+        overlay.remove();
+        setCookie('sms_popup_' + popup.id, 'closed', popup.reopen_minutes || 60);
+      }
+    });
 
     var steps = overlay.find('.sms-step');
     var cur = 0, values = {};
@@ -785,7 +819,7 @@ function updateButtons() {
   }
 
   if (isLastStep) {
-    nextBtn.text('ارسال');
+    nextBtn.text('ارسال درخواست');
     nextBtn.removeClass('sms-next').addClass('sms-submit-btn');
   } else {
     nextBtn.text('بعدی');

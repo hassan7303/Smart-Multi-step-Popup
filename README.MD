@@ -137,8 +137,8 @@
       "id": "s1",
       "title": "۱) آیا کتابی در دست نوشتن یا چاپ دارید؟",
       "fields": [
-        {                    
-          "type": "note",                                                                    
+        {
+          "type": "note",
           "name": "intro",
           "content": "جهت دریافت مشاوره رایگان چاپ کتاب لطفا فرم زیر را تکمیل کنید."
         },
@@ -249,45 +249,66 @@
       ]
     },
     {
-    "id": "s6",
-    "title": "۶) اطلاعات تماس شما",
-    "autoSubmit":true,
-    "onSubmitShowStep": "s7",
-    "condition": {
-      "any": [
-        { "field": "status", "equals": "در حال نوشتن یا آماده‌ی چاپ است" },
-        { "field": "status", "equals": "هنوز نوشتن را شروع نکرده‌ام" }
+      "id": "s6",
+      "title": "۶) اطلاعات تماس شما",
+      "autoSubmit": true,
+      "onSubmitShowStep": "s7",
+      "condition": {
+        "any": [
+          { "field": "status", "equals": "در حال نوشتن یا آماده‌ی چاپ است" },
+          { "field": "status", "equals": "هنوز نوشتن را شروع نکرده‌ام" }
+        ]
+      },
+      "fields": [
+        {
+          "type": "text",
+          "name": "fullname",
+          "label": "نام و نام خانوادگی",
+          "required": true
+        },
+        {
+          "type": "tel",
+          "name": "phone",
+          "label": "شماره همراه",
+          "required": true
+        }
       ]
     },
-    "fields": [
-      {
-        "type": "text",
-        "name": "fullname",
-        "label": "نام و نام خانوادگی",
-        "required": true
-      },
-      {
-        "type": "tel",
-        "name": "phone",
-        "label": "شماره همراه",
-        "required": true
-      }
-    ]
-  },
-  {
-    "id": "s7",
-    "title": "✅ فرم با موفقیت ارسال شد",
-    "hideButtons": true,
-    "fields": [
-      {
-        "type": "html",
-        "label": "<div style='text-align:center;padding:25px 15px;'><h2 style='color:#2ecc71;margin-bottom:10px;'>منتظر تماس ما باشید</h2><p style='font-size:16px;margin-bottom:20px;color:#444;'>همچنین شما می‌توانید با شماره زیر تماس بگیرید:</p><div style='display:inline-block;background:#f9f9f9;border:2px solid #2ecc71;border-radius:10px;padding:12px 20px;font-size:20px;font-weight:bold;color:#27ae60;direction:ltr;'>021-91091128 <span style='font-size:14px;color:#555;'>(داخلی 1)</span></div></div>"
-      }
-    ]
-  }
 
+    {
+      "id": "s7",
+      "title": "",
+      "hideButtons": true,
+      "condition": {
+        "field": "status",
+        "equals": "در حال نوشتن یا آماده‌ی چاپ است"
+      },
+      "fields": [
+        {
+          "type": "html",
+          "label": "<div class='row' style='text-align:center;padding:25px 15px;'><div class='col-sm-12 mb-2'><i class='fa fa-check' style='font-size:48px;color:#2ecc71;margin-bottom:10px;'></i></div><div class='col-sm-12 mb-2'><h4 class='mt-3 mb-2' style='color:#2c3e50;'>منتظر تماس ما باشید</h4><h5 style='color:#555;'>همچنین شما می‌توانید با شماره <a class='sms__popup__a' href='tel:02191091128'>02191091128</a> داخلی 1 تماس بگیرید.</h5></div></div>"
+        }
+      ]
+    },
+
+    {
+      "id": "s8",
+      "title": "",
+      "hideButtons": true,
+      "condition": {
+        "field": "status",
+        "equals": "هنوز نوشتن را شروع نکرده‌ام"
+      },
+      "fields": [
+        {
+          "type": "html",
+          "label": "<div class='row' style='text-align:center;padding:25px 15px;'><div class='col-sm-12 mb-2'><i class='fa fa-check' style='font-size:48px;color:#2ecc71;margin-bottom:10px;'></i></div><div class='col-sm-12 mb-2'><h4 class='mt-3 mb-2'>منتظر تماس ما باشید</h4><h5>همچنین شما می‌توانید با شماره <a class='sms__popup__a' href='tel:02191091128'>02191091128</a> داخلی 1 تماس بگیرید.</h5></div><div class='col-sm-12 mb-2'><a class='sms__popup__a' href='https://www.motekhassesan.com/how-to-write-book/' target='_blank'>مقاله چگونه کتاب بنویسید</a></div><div class='col-sm-12 mb-2'><a class='sms__popup__a' href='https://www.instagram.com/nashr_ir?igsh=cGxnNGZtYnExYWg0' target='_blank'>اینستاگرام انتشارات متخصصان</a></div></div>"
+        }
+      ]
+    }
   ]
 }
+
 
 ```
 
