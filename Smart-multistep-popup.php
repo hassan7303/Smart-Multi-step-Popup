@@ -744,7 +744,11 @@ function submitForm() {
   var msgBox = $('<div class="sms-message" style="text-align:center;margin-top:15px;font-weight:bold;color:#555;">در حال ارسال...</div>');
   overlay.find('.sms-popup').append(msgBox);
 
-  $.post(smsAjax.ajaxurl, { action: 'sms_submit', payload: JSON.stringify(payload) })
+  $.post(smsAjax.ajaxurl, { 
+    action: 'sms_submit',
+    _wpnonce: smsAjax.nonce,
+    payload: JSON.stringify(payload)
+  })
     .done(function (res) {
       overlay.find('.sms-message').remove();
 
@@ -912,29 +916,72 @@ JS;
   public function ajax_submit()
   {
     global $wpdb;
-    $table = $wpdb->prefix . 'sms_popup_submissions'; // ✅ جدول دیتابیس خودت
+
+    $table = $wpdb->prefix . 'sms_popup_submissions';
 
     if (empty($_POST['payload'])) {
       wp_send_json_error(['msg' => 'no payload']);
     }
 
     $payload = json_decode(stripslashes($_POST['payload']), true);
-    if (!$payload) {
+    if (!$payload || ! is_array($payload)) {
       wp_send_json_error(['msg' => 'invalid json']);
     }
 
-    $popup_id = sanitize_text_field($payload['popup_id']);
-    $data     = wp_json_encode($payload['data'], JSON_UNESCAPED_UNICODE);
-    $sender   = sanitize_text_field($payload['senderButton'] ?? '');
-    $ip       = $_SERVER['REMOTE_ADDR'];
+    $client_nonce = isset($payload['_wpnonce']) ? sanitize_text_field($payload['_wpnonce']) : '';
+    if (empty($client_nonce) || ! wp_verify_nonce($client_nonce, 'sms_submit')) {
+      wp_send_json_error(['msg' => 'invalid nonce'], 403);
+    }
 
-    // ✅ درج در جدول سفارشی
+
+    // بررسی ساختار و sanitization فیلدها
+    $popup_id = isset($payload['popup_id']) ? sanitize_text_field($payload['popup_id']) : '';
+    $sender   = isset($payload['senderButton']) ? sanitize_text_field($payload['senderButton']) : '';
+    $data_raw = isset($payload['data']) && is_array($payload['data']) ? $payload['data'] : array();
+
+    // sanitize/clean هر مقدار داخل data — به صورت امن همه رو تبدیل به رشته پاک‌شده می‌کنیم
+    $clean_data = array();
+    foreach ($data_raw as $k => $v) {
+      if (is_array($v)) {
+        // مثلا services یا skills که آرایه‌ست
+        $clean_data[$k] = array_map('sanitize_text_field', $v);
+      } elseif (is_string($v) || is_numeric($v)) {
+        $val = trim((string) $v);
+
+        if ($k === 'email') {
+          $clean_data[$k] = sanitize_email($val);
+        } elseif (in_array($k, ['phone', 'budget', 'popup_id'], true)) {
+          $clean_data[$k] = sanitize_text_field($val);
+        } elseif (in_array($k, ['description', 'message', 'notes'], true)) {
+          // اگه می‌خوای یه ذره HTML مجاز باشه
+          $allowed_html = [
+            'strong' => [],
+            'em'     => [],
+            'br'     => [],
+            'p'      => [],
+            'b'      => [],
+            'i'      => [],
+          ];
+          $clean_data[$k] = wp_kses($val, $allowed_html);
+        } else {
+          $clean_data[$k] = sanitize_text_field($val);
+        }
+      } else {
+        $clean_data[$k] = '';
+      }
+    }
+
+
+    $data = wp_json_encode($clean_data, JSON_UNESCAPED_UNICODE);
+    $ip   = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : '';
+
     $ok = $wpdb->insert(
       $table,
       [
-        'popup_id'      => $popup_id,
-        'data'          => $data,
-        'submitted_at'  => current_time('mysql'),
+        'popup_id'     => $popup_id,
+        'data'         => $data,
+        'submitted_at' => current_time('mysql'),
+        // شما میتوانید ip را هم ذخیره کنید در صورت لزوم - نیاز به اضافه کردن ستون
       ],
       ['%s', '%s', '%s']
     );
@@ -942,7 +989,7 @@ JS;
     if ($ok) {
       wp_send_json_success(['id' => $wpdb->insert_id]);
     } else {
-      error_log('❌ sms_submit db error: ' . $wpdb->last_error);
+      error_log('sms_submit db error: ' . $wpdb->last_error);
       wp_send_json_error(['msg' => 'db insert failed']);
     }
   }
