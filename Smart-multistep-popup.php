@@ -285,14 +285,39 @@ class SMSSmartPopup
       fputcsv($out, array('ID', 'Popup ID', 'Time', 'Data'));
 
       foreach ($rows as $r) {
-        fputcsv($out, array($r->id, $r->popup_id, $r->submitted_at, $r->data));
+        fputcsv($out, array(
+          $this->sms_sanitize_csv_field($r->id),
+          $this->sms_sanitize_csv_field($r->popup_id),
+          $this->sms_sanitize_csv_field($r->submitted_at),
+          $this->sms_sanitize_csv_field($r->data)
+        ));
       }
+
 
       fclose($out);
       exit;
     }
   }
 
+  public function sms_sanitize_csv_field($value) {
+    // به متن تبدیلش کن
+    $value = (string) $value;
+    
+    // حذف خط‌های جدید
+    $value = str_replace(["\r\n", "\n", "\r"], ' ', $value);
+  
+    // اگه با یکی از کاراکترهای خطرناک شروع می‌شه
+    if (preg_match('/^(\=|\+|\-|\@|\t)/', $value)) {
+      $value = "'" . $value; // اضافه کردن apostrophe
+    }
+  
+    // محدود کردن طول برای احتیاط
+    if (strlen($value) > 5000) {
+      $value = substr($value, 0, 5000) . '...';
+    }
+  
+    return $value;
+  }
   public function admin_page()
   {
     if (!current_user_can('manage_options')) wp_die('Not allowed');
