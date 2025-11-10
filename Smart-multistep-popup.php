@@ -109,7 +109,13 @@ class SMSSmartPopup
                 <td><?php echo esc_html($mobile ?: '—'); ?></td>
                 <td><?php echo esc_html($r->submitted_at); ?></td>
                 <td>
-                  <button class="button view-json" data-json="<?php echo esc_attr($r->data); ?>">👁️ نمایش</button>
+                  <?php
+                  // $r->data رشتهٔ JSON ذخیره‌شده‌ست؛ decode کن تا مطمئن باشیم درست فرمته
+                  $decoded = json_decode($r->data, true);
+                  // دوباره encode با حفاظت (HEX برای تگ‌ها و کوتیشن‌ها) تا داخل attribute امن باشه
+                  $safe_json_attr = esc_attr(wp_json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS));
+                  ?>
+                  <button class="button view-json" data-json="<?php echo $safe_json_attr; ?>">👁️ نمایش</button>
                 </td>
               </tr>
           <?php endforeach;
@@ -121,7 +127,7 @@ class SMSSmartPopup
     <script>
       jQuery(function($) {
         $('body').on('click', '.view-json', function() {
-          var raw = $(this).data('json');
+          var raw = $(this).attr('data-json') || $(this).data('json') || '';
           var obj;
           try {
             obj = JSON.parse(raw);
@@ -129,33 +135,57 @@ class SMSSmartPopup
             obj = raw;
           }
 
-          var content = '<table class="json-table">';
-          if (typeof obj === 'object') {
+          // ساخت جدول امن با استفاده از text()
+          var $table = $('<table>').addClass('json-table');
+          if (typeof obj === 'object' && obj !== null) {
             for (var k in obj) {
-              if (!obj.hasOwnProperty(k)) continue;
-              content += '<tr><th>' + k + '</th><td>' + obj[k] + '</td></tr>';
+              if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+              var v = obj[k];
+
+              // اگه مقدار خودش آرایه/آبجکت بود، stringify کن (و بعد متنش کن)
+              if (typeof v === 'object' && v !== null) {
+                try {
+                  v = JSON.stringify(v, null, 2);
+                } catch (e) {
+                  v = String(v);
+                }
+              }
+
+              var $tr = $('<tr>');
+              $('<th>').text(k).appendTo($tr);
+              $('<td>').text(v).appendTo($tr); // اینجا .text() مهمه — هیچ HTMLی تزریق نمیشه
+              $table.append($tr);
             }
           } else {
-            content += '<tr><td>' + raw + '</td></tr>';
+            // raw ممکنه string باشه؛ مستقیماً text می‌کنیم
+            var $tr = $('<tr>');
+            $('<td>').text(raw).appendTo($tr);
+            $table.append($tr);
           }
-          content += '</table>';
 
-          var overlay = $('<div class="sms-admin-overlay">\
-                <div class="sms-admin-popup">\
-                    <span class="close">&times;</span>\
-                    <h2>جزئیات ارسال</h2>\
-                    <div class="content">' + content + '</div>\
-                </div>\
-            </div>');
-          $('body').append(overlay);
-          overlay.fadeIn(200);
-        });
-        $('body').on('click', '.sms-admin-overlay', function(e) {
-          if ($(e.target).is('.sms-admin-overlay')) {
-            $(this).fadeOut(150, function() {
-              $(this).remove();
+          // ساخت modal با jQuery به‌جای رشته‌سازی HTML
+          var $overlay = $('<div>').addClass('sms-admin-overlay');
+          var $popup = $('<div>').addClass('sms-admin-popup');
+          $('<span>').addClass('close').html('&times;').appendTo($popup);
+          $('<h2>').text('جزئیات ارسال').appendTo($popup);
+          $('<div>').addClass('content').append($table).appendTo($popup);
+          $overlay.append($popup);
+          $('body').append($overlay);
+          $overlay.fadeIn(200);
+
+          // بستن modal
+          $overlay.on('click', function(e) {
+            if ($(e.target).is('.sms-admin-overlay')) {
+              $overlay.fadeOut(150, function() {
+                $overlay.remove();
+              });
+            }
+          });
+          $overlay.on('click', '.close', function() {
+            $overlay.fadeOut(150, function() {
+              $overlay.remove();
             });
-          }
+          });
         });
       });
     </script>
@@ -299,23 +329,24 @@ class SMSSmartPopup
     }
   }
 
-  public function sms_sanitize_csv_field($value) {
+  public function sms_sanitize_csv_field($value)
+  {
     // به متن تبدیلش کن
     $value = (string) $value;
-    
+
     // حذف خط‌های جدید
     $value = str_replace(["\r\n", "\n", "\r"], ' ', $value);
-  
+
     // اگه با یکی از کاراکترهای خطرناک شروع می‌شه
     if (preg_match('/^(\=|\+|\-|\@|\t)/', $value)) {
       $value = "'" . $value; // اضافه کردن apostrophe
     }
-  
+
     // محدود کردن طول برای احتیاط
     if (strlen($value) > 5000) {
       $value = substr($value, 0, 5000) . '...';
     }
-  
+
     return $value;
   }
   public function admin_page()
