@@ -48,6 +48,9 @@ class SMSSmartPopup
   }
   public function reports_page()
   {
+    if ( ! current_user_can('manage_options') ) {
+      wp_die(__('You do not have sufficient permissions to access this page.'));
+    }
     global $wpdb;
     $table = $wpdb->prefix . 'sms_popup_submissions';
 
@@ -166,7 +169,7 @@ class SMSSmartPopup
           // ساخت modal با jQuery به‌جای رشته‌سازی HTML
           var $overlay = $('<div>').addClass('sms-admin-overlay');
           var $popup = $('<div>').addClass('sms-admin-popup');
-          $('<span>').addClass('close').html('&times;').appendTo($popup);
+          $('<span>').addClass('close').text('&times;').appendTo($popup);
           $('<h2>').text('جزئیات ارسال').appendTo($popup);
           $('<div>').addClass('content').append($table).appendTo($popup);
           $overlay.append($popup);
@@ -261,9 +264,41 @@ class SMSSmartPopup
         'delay' => intval($_POST['sms_delay']),
         'scroll' => intval($_POST['sms_scroll']),
         'reopen_minutes' => intval($_POST['sms_reopen_minutes']),
-        'form_json' => wp_unslash($_POST['sms_form_json']),
         'active' => isset($_POST['sms_active']) ? 1 : 0,
       );
+      $form_json_raw = wp_unslash($_POST['sms_form_json']);
+      $decoded = json_decode($form_json_raw, true);
+      if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+        add_settings_error('sms_messages', 'sms-json-error', 'Invalid form JSON', 'error');
+      } else {
+        // ولیدیت ساده: باید steps آرایه باشه
+        if (!isset($decoded['steps']) || !is_array($decoded['steps'])) {
+          add_settings_error('sms_messages', 'sms-json-error', 'form_json must contain steps array', 'error');
+        } else {
+          // sanitize: traverse steps->fields and clean labels/names/options
+          foreach ($decoded['steps'] as &$s) {
+            if (isset($s['title'])) $s['title'] = sanitize_text_field($s['title']);
+            if (!empty($s['fields']) && is_array($s['fields'])) {
+              foreach ($s['fields'] as &$f) {
+                $f['label'] = isset($f['label']) ? sanitize_text_field($f['label']) : '';
+                $f['name']  = isset($f['name']) ? preg_replace('/[^a-z0-9_\-]/i', '', $f['name']) : '';
+                if (!empty($f['options']) && is_array($f['options'])) {
+                  $f['options'] = array_map('sanitize_text_field', $f['options']);
+                }
+                // محدود کردن type به لیست مجاز
+                $allowed_types = ['text', 'email', 'tel', 'choice', 'checkbox', 'note', 'html', 'button'];
+                if (isset($f['type']) && !in_array($f['type'], $allowed_types, true)) {
+                  $f['type'] = 'text';
+                }
+              }
+              unset($f);
+            }
+          }
+          unset($s);
+          $data['form_json'] = $decoded; // ذخیره آرایه امن
+        }
+      }
+
       // if id exists replace
       $found = false;
       foreach ($popups as $i => $p) {
@@ -292,6 +327,7 @@ class SMSSmartPopup
     // ✅ Export submissions from database table
     if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') {
       if (!check_admin_referer('sms_export')) return;
+      
 
       global $wpdb;
       $table = $wpdb->prefix . 'sms_popup_submissions';
@@ -333,18 +369,13 @@ class SMSSmartPopup
   {
     // به متن تبدیلش کن
     $value = (string) $value;
-
-    // حذف خط‌های جدید
     $value = str_replace(["\r\n", "\n", "\r"], ' ', $value);
-
-    // اگه با یکی از کاراکترهای خطرناک شروع می‌شه
-    if (preg_match('/^(\=|\+|\-|\@|\t)/', $value)) {
-      $value = "'" . $value; // اضافه کردن apostrophe
+    $value = ltrim($value);
+    if (preg_match('/^[=+\-@]/', $value)) {
+        $value = "'$value";
     }
-
-    // محدود کردن طول برای احتیاط
     if (strlen($value) > 5000) {
-      $value = substr($value, 0, 5000) . '...';
+        $value = substr($value, 0, 5000) . '...';
     }
 
     return $value;
@@ -431,10 +462,26 @@ class SMSSmartPopup
             <th>Active</th>
             <td><label><input type="checkbox" name="sms_active" <?php checked($editing ? $editing['active'] : 1, 1); ?>> Active</label></td>
           </tr>
+          <?php
+          // prepare a safe string to show inside the textarea
+          $editing_form_json = '';
+          if ($editing && isset($editing['form_json'])) {
+            if (is_array($editing['form_json'])) {
+              // pretty-print array JSON for easier editing
+              $editing_form_json = wp_json_encode($editing['form_json'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            } else {
+              // legacy: stored as string — unslash it
+              $editing_form_json = wp_unslash((string) $editing['form_json']);
+            }
+          }
+          ?>
           <tr>
             <th>Form JSON</th>
-            <td><textarea name="sms_form_json" rows="10" class="large-text code"><?php echo esc_textarea(stripslashes($editing ? $editing['form_json'] : '')); ?></textarea></td>
+            <td>
+              <textarea name="sms_form_json" rows="10" class="large-text code"><?php echo esc_textarea($editing_form_json); ?></textarea>
+            </td>
           </tr>
+
         </table>
         <p><button class="button button-primary" type="submit" name="sms_save_popup">Save popup</button></p>
       </form>
@@ -600,7 +647,20 @@ class SMSSmartPopup
 
     // localize with popups data
     $popups = get_option($this->option_key, array());
-    wp_localize_script('sms-popup-js', 'smsPopupsData', $popups);
+    $popups_safe = $popups;
+    foreach ($popups_safe as &$p) {
+      // اگر form_json رشته است، decode کن و پاکسازی اشیا
+      if (isset($p['form_json']) && is_string($p['form_json'])) {
+        $decoded = json_decode(wp_unslash($p['form_json']), true);
+        if (is_array($decoded)) {
+          // اینجا بهتره که ساختار رو validate کنیم (schema) — حداقل مطمئن شیم فقط keys مورد انتظار هستن
+          $p['form_json'] = $decoded; // تبدیل به آرایه برای json_encode امن
+        } else {
+          $p['form_json'] = null;
+        }
+      }
+    }
+    wp_add_inline_script('sms-popup-js', 'var smsPopupsData = ' . wp_json_encode($popups_safe, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS | JSON_UNESCAPED_UNICODE) . ';', 'before');
     wp_localize_script('sms-popup-js', 'smsAjax', array('ajaxurl' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('sms_submit')));
   }
 
@@ -623,10 +683,16 @@ class SMSSmartPopup
       return v?decodeURIComponent(v[2]):null;
   }
 
-  function setCookie(name,val,mins){
-      var d = new Date(); d.setTime(d.getTime() + mins*60*1000);
-      document.cookie = name+'='+encodeURIComponent(val)+';expires='+d.toUTCString()+';path=/';
+  function setCookie(name, val, mins) {
+  var d = new Date(); d.setTime(d.getTime() + mins*60*1000);
+  var cookie = name + '=' + encodeURIComponent(val) + ';expires=' + d.toUTCString() + ';path=/';
+  if (location.protocol === 'https:') {
+    cookie += ';SameSite=Lax;Secure';
+  } else {
+    cookie += ';SameSite=Lax';
   }
+  document.cookie = cookie;
+}
 
   function evaluateCondition(cond, values){
     if (!cond) return true;
@@ -650,7 +716,7 @@ class SMSSmartPopup
     // 📘 نوع جدید: note (توضیحات با کادر سبز)
     if (f.type === 'note') {
         var note = $('<div class="sms-note"></div>')
-            .html(f.content || '')
+            .text(f.content || '')
             .css({
                 'background': '#e6f4ea',
                 'border': '1px solid #66bb6a',
@@ -971,18 +1037,30 @@ JS;
   // --- AJAX submit ---
   public function ajax_submit()
   {
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : '';
+    check_ajax_referer('sms_submit', '_wpnonce', true);
+    $transient_key = 'sms_sub_' . md5($ip);
+    $count = (int) get_transient($transient_key);
+    if ($count >= 10) { // مثلا 10 submissions in window
+      wp_send_json_error(['msg' => 'rate_limited'], 429);
+    }
+    set_transient($transient_key, $count + 1, 5 * MINUTE_IN_SECONDS); // window 5 minutes
+
     global $wpdb;
 
     $table = $wpdb->prefix . 'sms_popup_submissions';
 
-    if (empty($_POST['payload'])) {
+    if (empty($_POST['payload'])  || strlen($_POST['payload']) > 65536) {
       wp_send_json_error(['msg' => 'no payload']);
     }
 
-    $payload = json_decode(stripslashes($_POST['payload']), true);
-    if (!$payload || ! is_array($payload)) {
-      wp_send_json_error(['msg' => 'invalid json']);
+    $raw_payload = wp_unslash($_POST['payload']);
+    $payload = json_decode($raw_payload, true);
+    if (!is_array($payload) || !isset($payload['data'])) {
+      wp_send_json_error(['msg' => 'invalid json'], 400);
     }
+
+    
 
     $client_nonce = isset($payload['_wpnonce']) ? sanitize_text_field($payload['_wpnonce']) : '';
     if (empty($client_nonce) || ! wp_verify_nonce($client_nonce, 'sms_submit')) {
