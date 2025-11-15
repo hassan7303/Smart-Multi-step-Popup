@@ -684,15 +684,15 @@ class SMSSmartPopup
   }
 
   function setCookie(name, val, mins) {
-  var d = new Date(); d.setTime(d.getTime() + mins*60*1000);
-  var cookie = name + '=' + encodeURIComponent(val) + ';expires=' + d.toUTCString() + ';path=/';
-  if (location.protocol === 'https:') {
-    cookie += ';SameSite=Lax;Secure';
-  } else {
-    cookie += ';SameSite=Lax';
+    var d = new Date(); d.setTime(d.getTime() + mins*60*1000);
+    var cookie = name + '=' + encodeURIComponent(val) + ';expires=' + d.toUTCString() + ';path=/';
+    if (location.protocol === 'https:') {
+      cookie += ';SameSite=Lax;Secure';
+    } else {
+      cookie += ';SameSite=Lax';
+    }
+    document.cookie = cookie;
   }
-  document.cookie = cookie;
-}
 
   function evaluateCondition(cond, values){
     if (!cond) return true;
@@ -751,10 +751,10 @@ class SMSSmartPopup
         html += '<div class="sms-field">'+f.label+'</div>';
     }else if (f.type === 'button' && f.action === 'submit') {
     html += '<div class="sms-field"><button type="button" class="sms-submit-btn">'+(f.label||'ارسال درخواست')+'</button></div>';
-}
+  }
 
 
-    step.append(html);
+  step.append(html);
 });
 step.append('<input type="text" name="hp_field" class="sms-hp" style="display:none !important;" tabindex="-1" autocomplete="off">');
 
