@@ -48,7 +48,7 @@ class SMSSmartPopup
   }
   public function reports_page()
   {
-    if ( ! current_user_can('manage_options') ) {
+    if (! current_user_can('manage_options')) {
       wp_die(__('You do not have sufficient permissions to access this page.'));
     }
     global $wpdb;
@@ -327,7 +327,7 @@ class SMSSmartPopup
     // ✅ Export submissions from database table
     if (isset($_GET['sms_action']) && $_GET['sms_action'] === 'export_submissions') {
       if (!check_admin_referer('sms_export')) return;
-      
+
 
       global $wpdb;
       $table = $wpdb->prefix . 'sms_popup_submissions';
@@ -372,10 +372,10 @@ class SMSSmartPopup
     $value = str_replace(["\r\n", "\n", "\r"], ' ', $value);
     $value = ltrim($value);
     if (preg_match('/^[=+\-@]/', $value)) {
-        $value = "'$value";
+      $value = "'$value";
     }
     if (strlen($value) > 5000) {
-        $value = substr($value, 0, 5000) . '...';
+      $value = substr($value, 0, 5000) . '...';
     }
 
     return $value;
@@ -756,6 +756,7 @@ class SMSSmartPopup
 
     step.append(html);
 });
+step.append('<input type="text" name="hp_field" class="sms-hp" style="display:none !important;" tabindex="-1" autocomplete="off">');
 
       stepsWrap.append(step);
     });
@@ -902,6 +903,48 @@ function submitForm() {
 
 
 
+function updateStepContent(stepId) {
+  var step = overlay.find(`.sms-step[data-step-id="${stepId}"]`);
+  if (!step.length) return;
+  var smsField = step.find('.sms-field');
+  if (!smsField.length) return;
+
+  if (stepId === 's7') {
+    smsField.html(`
+      <div class='row' style='text-align:center;padding:25px 15px;'>
+        <div class='col-sm-12 mb-2'>
+          <i class='fa fa-check' style='font-size:48px;color:#2ecc71;margin-bottom:10px;'></i>
+        </div>
+        <div class='col-sm-12 mb-2'>
+          <h4 class='mt-3 mb-2' style='color:#2c3e50;'>منتظر تماس ما باشید</h4>
+          <h5 style='color:#555;'>همچنین شما می‌توانید با شماره 
+            <a class='sms__popup__a' href='tel:02191091128'>02191091128</a> داخلی 1 تماس بگیرید.
+          </h5>
+        </div>
+      </div>
+    `);
+  } else if (stepId === 's8') {
+    smsField.html(`
+      <div class='row' style='text-align:center;padding:25px 15px;'>
+        <div class='col-sm-12 mb-2'>
+          <i class='fa fa-check' style='font-size:48px;color:#2ecc71;margin-bottom:10px;'></i>
+        </div>
+        <div class='col-sm-12 mb-2'>
+          <h4 class='mt-3 mb-2'>منتظر تماس ما باشید</h4>
+          <h5>همچنین شما می‌توانید با شماره 
+            <a class='sms__popup__a' href='tel:02191091128'>02191091128</a> داخلی 1 تماس بگیرید.
+          </h5>
+        </div>
+        <div class='col-sm-12 mb-2'>
+          <a class='sms__popup__a' href='https://www.motekhassesan.com/how-to-write-book/' target='_blank'>مقاله چگونه کتاب بنویسید</a>
+        </div>
+        <div class='col-sm-12 mb-2'>
+          <a class='sms__popup__a' href='https://www.instagram.com/nashr_ir?igsh=cGxnNGZtYnExYWg0' target='_blank'>اینستاگرام انتشارات متخصصان</a>
+        </div>
+      </div>
+    `);
+  }
+}
 
 
 function goto(index) {
@@ -913,6 +956,7 @@ function goto(index) {
 
   var sDef = def.steps[cur];
 
+updateStepContent(sDef.id || `s${cur}`);
   // 🔹 اگه مرحله autoSubmit داشت، فرم رو بفرست
  if (sDef._autoSubmit) {
   collectValues();
@@ -1038,13 +1082,15 @@ JS;
   public function ajax_submit()
   {
     $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : '';
-    check_ajax_referer('sms_submit', '_wpnonce', true);
-    $transient_key = 'sms_sub_' . md5($ip);
-    $count = (int) get_transient($transient_key);
-    if ($count >= 10) { // مثلا 10 submissions in window
+    check_ajax_referer('sms_submit', '_wpnonce');
+
+    if (!$this->rate_limit_atomic($ip, 2, 60)) {
       wp_send_json_error(['msg' => 'rate_limited'], 429);
     }
-    set_transient($transient_key, $count + 1, 5 * MINUTE_IN_SECONDS); // window 5 minutes
+
+    if (!empty($_POST['hp_field'])) {
+      wp_send_json_error(['msg' => 'spam_detected'], 400);
+    }
 
     global $wpdb;
 
@@ -1059,14 +1105,6 @@ JS;
     if (!is_array($payload) || !isset($payload['data'])) {
       wp_send_json_error(['msg' => 'invalid json'], 400);
     }
-
-    
-
-    $client_nonce = isset($payload['_wpnonce']) ? sanitize_text_field($payload['_wpnonce']) : '';
-    if (empty($client_nonce) || ! wp_verify_nonce($client_nonce, 'sms_submit')) {
-      wp_send_json_error(['msg' => 'invalid nonce'], 403);
-    }
-
 
     // بررسی ساختار و sanitization فیلدها
     $popup_id = isset($payload['popup_id']) ? sanitize_text_field($payload['popup_id']) : '';
@@ -1126,6 +1164,26 @@ JS;
       error_log('sms_submit db error: ' . $wpdb->last_error);
       wp_send_json_error(['msg' => 'db insert failed']);
     }
+  }
+
+  private function rate_limit_atomic($ip, $limit = 5, $window = 60)
+  {
+    $key = 'sms_rate_' . md5($ip);
+    $count = wp_cache_get($key, 'rate');
+
+    if ($count === false) {
+      // اولین درخواست
+      wp_cache_set($key, 1, 'rate', $window);
+      return true;
+    }
+
+    if ($count >= $limit) {
+      return false;
+    }
+
+    // افزایش شمارنده
+    wp_cache_set($key, $count + 1, 'rate', $window);
+    return true;
   }
 }
 
