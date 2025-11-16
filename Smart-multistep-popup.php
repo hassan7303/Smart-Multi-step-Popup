@@ -65,7 +65,7 @@ class SMSSmartPopup
 
     $sql = "SELECT * FROM $table $where ORDER BY submitted_at DESC LIMIT 200";
     $rows = $params ? $wpdb->get_results($wpdb->prepare($sql, ...$params)) : $wpdb->get_results($sql);
-?>
+    ?>
     <div class="wrap">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
         <h1>📊 Popup Reports</h1>
@@ -255,6 +255,15 @@ class SMSSmartPopup
     if (!current_user_can('manage_options')) return;
     // save popup (create/update)
     if (isset($_POST['sms_save_popup']) && check_admin_referer('sms_save_popup')) {
+        if (isset($_POST['sms_webhook_url'])) {
+            $url = trim(sanitize_text_field($_POST['sms_webhook_url']));
+            if (!empty($url) && preg_match('#^https://#i', $url)) {
+                update_option('sms_webhook_url', esc_url_raw($url));
+            } else {
+                add_settings_error('sms_messages', 'sms_webhook_error', 'Webhook باید با https شروع شود.', 'error');
+            }
+        }
+
       $popups = get_option($this->option_key, array());
       $id = sanitize_text_field($_POST['sms_id']);
       $data = array(
@@ -446,6 +455,20 @@ class SMSSmartPopup
             <th>Slugs</th>
             <td><input name="sms_slugs" class="regular-text" value="<?php echo esc_attr($editing ? implode(',', $editing['slugs']) : ''); ?>"></td>
           </tr>
+          <tr>
+              <th>Webhook URL (HTTPS)</th>
+              <td>
+                <input 
+                  type="url" 
+                  name="sms_webhook_url" 
+                  class="regular-text"
+                  value="<?php echo esc_url(get_option('sms_webhook_url', '')); ?>"
+                  placeholder="https://example.com/webhook"
+                >
+                <p class="description">آدرس HTTPS برای ارسال اطلاعات فرم (مثلاً آدرس وب‌هوک تلگرام)</p>
+              </td>
+            </tr>
+
           <tr>
             <th>Delay</th>
             <td><input name="sms_delay" class="small-text" value="<?php echo esc_attr($editing ? $editing['delay'] : 5); ?>"></td>
@@ -1159,7 +1182,16 @@ JS;
     );
 
     if ($ok) {
-      wp_send_json_success(['id' => $wpdb->insert_id]);
+        $webhook = get_option('sms_webhook_url'); 
+        if ($webhook) {
+            wp_remote_post($webhook, [
+                'method' => 'POST',
+                'headers' => ['Content-Type' => 'application/json'],
+                'body'    => $data
+            ]);
+        }
+
+        wp_send_json_success(['id' => $wpdb->insert_id]);
     } else {
       error_log('sms_submit db error: ' . $wpdb->last_error);
       wp_send_json_error(['msg' => 'db insert failed']);
